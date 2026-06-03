@@ -1,0 +1,28 @@
+{
+  "name": "injective-testnet-dapp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@injectivelabs/networks": "^1.19.28",
+    "@injectivelabs/sdk-ts": "^1.19.28",
+    "@injectivelabs/ts-types": "^1.19.28",
+    "@injectivelabs/utils": "^1.19.28",
+    "@injectivelabs/wallet-base": "^1.19.28",
+    "@injectivelabs/wallet-core": "^1.19.28",
+    "@injectivelabs/wallet-cosmos": "^1.19.28",
+    "@injectivelabs/wallet-evm": "^1.19.28"
+  },
+  "devDependencies": {
+    "nuxt": "^3.15.4",
+    "vite-plugin-node-polyfills": "^0.23.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  }
+}
