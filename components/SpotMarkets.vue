@@ -18,123 +18,47 @@ const filtered = computed(() => {
 </script>
 
 <template>
-  <section class="card markets">
-    <div class="card-head">
-      <span class="card-title">Spot Markets</span>
-      <span class="pill">{{ markets.length }}</span>
+  <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
+    <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
+      <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Spot Markets</span>
+      <UBadge variant="subtle" size="sm">{{ markets.length }}</UBadge>
     </div>
 
-    <div class="search">
-      <input
+    <div class="flex-none px-3 py-2 border-b border-border-soft">
+      <UInput
         v-model="query"
-        type="text"
         placeholder="Filter e.g. INJ"
-        spellcheck="false"
+        size="sm"
+        icon="i-lucide-search"
       />
     </div>
 
-    <div v-if="marketsError" class="state err">{{ marketsError }}</div>
-    <div v-else-if="marketsLoading && !markets.length" class="state muted">
+    <div v-if="marketsError" class="p-4 text-ask text-sm">{{ marketsError }}</div>
+    <div v-else-if="marketsLoading && !markets.length" class="p-4 text-sm text-[var(--ui-text-muted)]">
       Loading markets…
     </div>
 
-    <ul v-else class="list">
+    <ul v-else class="list-none m-0 p-1 overflow-y-auto flex-1 min-h-0">
       <li
         v-for="m in filtered"
         :key="m.marketId"
-        :class="{ active: m.marketId === selectedMarketId }"
+        class="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer border border-transparent transition-colors hover:bg-surface-2"
+        :class="{ 'bg-surface-2 !border-accent-dim': m.marketId === selectedMarketId }"
         @click="selectMarket(m.marketId)"
       >
-        <TokenIcon :logo="(m.baseToken as any)?.logo" :symbol="m.baseToken?.symbol" :size="24" />
-        <span class="pair">
-          <span class="base">{{ m.baseToken?.symbol }}</span>
-          <span class="slash">/</span>
-          <span class="quote">{{ m.quoteToken?.symbol }}</span>
+        <TokenIcon :logo="(m.baseToken as any)?.logo" :symbol="m.baseToken?.symbol" :size="20" />
+        <span class="text-[13px] font-semibold whitespace-nowrap leading-tight">
+          <span class="text-[var(--ui-text-highlighted)]">{{ m.baseToken?.symbol }}</span>
+          <span class="text-[var(--ui-text-dimmed)] mx-0.5 font-normal">/</span>
+          <span class="text-[var(--ui-text-muted)]">{{ m.quoteToken?.symbol }}</span>
         </span>
-        <span class="name faint">{{ cleanName((m.baseToken as any)?.name) }}</span>
+        <span class="ml-auto text-[10px] text-[var(--ui-text-dimmed)] max-w-[70px] truncate text-right">
+          {{ cleanName((m.baseToken as any)?.name) }}
+        </span>
       </li>
-      <li v-if="!filtered.length" class="state muted no-hover">No matches.</li>
+      <li v-if="!filtered.length" class="p-4 text-sm text-[var(--ui-text-muted)] text-center cursor-default">
+        No matches.
+      </li>
     </ul>
-  </section>
+  </div>
 </template>
-
-<style scoped>
-.markets {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.search {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.search input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 7px 10px;
-  color: var(--text);
-  font-size: 13px;
-  font-family: var(--mono);
-  outline: none;
-}
-.search input:focus {
-  border-color: var(--accent-dim);
-}
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 4px;
-  overflow-y: auto;
-  flex: 1;
-}
-.list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  border-radius: 7px;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-.list li:hover:not(.no-hover) {
-  background: var(--bg-elev-2);
-}
-.list li.active {
-  background: var(--bg-elev-2);
-  border-color: var(--accent-dim);
-}
-.pair {
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.base {
-  color: var(--text);
-}
-.slash {
-  color: var(--text-faint);
-  margin: 0 3px;
-  font-weight: 400;
-}
-.quote {
-  color: var(--text-dim);
-}
-.name {
-  margin-left: auto;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 90px;
-  text-align: right;
-}
-.state {
-  padding: 18px 16px;
-  font-size: 13px;
-}
-.no-hover {
-  cursor: default;
-}
-</style>

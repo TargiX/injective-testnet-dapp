@@ -29,9 +29,21 @@ export interface PricePoint {
   p: number // human price
 }
 
+export type ChartResolution = '1' | '5' | '15' | '60' | '240' | '1D' | '1W'
+
+export interface PriceCandle {
+  time: number // seconds timestamp, as expected by lightweight-charts
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
 export interface Endpoints {
   grpc: string
   indexer: string
+  chart: string
 }
 
 // The Injective SDK is large and node-oriented, so we never pull it into the
@@ -42,6 +54,7 @@ interface Engine {
   endpoints: Endpoints
   bankApi: any
   spotApi: any
+  chartApi: any
   walletStrategy: any
   Wallet: any
 }
@@ -56,6 +69,8 @@ async function createEngine(): Promise<Engine> {
     walletBase,
     walletCore,
     walletCosmos,
+    indexerProto,
+    grpcWeb,
   ] = await Promise.all([
     import('@injectivelabs/sdk-ts'),
     import('@injectivelabs/networks'),
@@ -63,34 +78,47 @@ async function createEngine(): Promise<Engine> {
     import('@injectivelabs/wallet-base'),
     import('@injectivelabs/wallet-core'),
     import('@injectivelabs/wallet-cosmos'),
+    import('@injectivelabs/indexer-proto-ts-v2'),
+    import('@protobuf-ts/grpcweb-transport'),
   ])
 
-  const endpoints = networks.getNetworkEndpoints(networks.Network.Testnet)
+  const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
+  const chartEndpoint =
+    endpoints.chart && endpoints.chart !== endpoints.indexer
+      ? endpoints.chart
+      : 'https://k8s.mainnet.chart.grpc-web.injective.network'
   const { Wallet } = walletBase
   const { ChainId } = tsTypes
 
-  // ChainGrpcBankApi (chain) and IndexerGrpcSpotApi (indexer) both talk gRPC-web.
+  // Chain, exchange indexer, and chart history are separate gRPC-web services.
   const bankApi = new sdk.ChainGrpcBankApi(endpoints.grpc)
   const spotApi = new sdk.IndexerGrpcSpotApi(endpoints.indexer)
+  const chartApi = new indexerProto.InjectiveChartRPCClient(
+    new grpcWeb.GrpcWebFetchTransport({
+      baseUrl: chartEndpoint,
+      format: 'binary',
+    }),
+  )
 
   const walletStrategy = new walletCore.BaseWalletStrategy({
-    chainId: ChainId.Testnet,
+    chainId: ChainId.Mainnet,
     strategies: {
       [Wallet.Keplr]: new walletCosmos.CosmosWalletStrategy({
-        chainId: ChainId.Testnet,
+        chainId: ChainId.Mainnet,
         wallet: Wallet.Keplr,
       }),
       [Wallet.Leap]: new walletCosmos.CosmosWalletStrategy({
-        chainId: ChainId.Testnet,
+        chainId: ChainId.Mainnet,
         wallet: Wallet.Leap,
       }),
     },
   })
 
   return {
-    endpoints: { grpc: endpoints.grpc, indexer: endpoints.indexer },
+    endpoints: { grpc: endpoints.grpc, indexer: endpoints.indexer, chart: chartEndpoint },
     bankApi,
     spotApi,
+    chartApi,
     walletStrategy,
     Wallet,
   }
@@ -119,13 +147,21 @@ export function useInjective() {
   const orderbookLoading = useState<boolean>('inj-ob-loading', () => false)
   const orderbookUpdatedAt = useState<number>('inj-ob-updated', () => 0)
 
-  // recent trades → price series for the price chart
+  // Recent trades are live market activity. Historical OHLCV chart data is
+  // loaded separately through InjectiveChartRPC below.
   const pricePoints = useState<PricePoint[]>('inj-price-points', () => [])
   const tradesLoading = useState<boolean>('inj-trades-loading', () => false)
+  const chartCandles = useState<PriceCandle[]>('inj-chart-candles', () => [])
+  const chartCandlesLoading = useState<boolean>('inj-chart-candles-loading', () => false)
+  const chartCandlesError = useState<string>('inj-chart-candles-error', () => '')
+
+  const fillPrice = useState<number | null>('inj-fill-price', () => null)
+  const fillAmount = useState<number | null>('inj-fill-amount', () => null)
 
   const endpoints = useState<Endpoints>('inj-endpoints', () => ({
     grpc: '',
     indexer: '',
+    chart: '',
   }))
 
   const tokenRegistry = useState<Record<string, TokenInfo>>(
@@ -177,6 +213,41 @@ export function useInjective() {
   }
 
   // ---- wallet ----
+  async function suggestKeplrChain() {
+    const keplr = (window as any).keplr
+    if (!keplr) return
+
+    const rpcUrl = endpoints.value.grpc || 'https://sentry.tm.injective.network:443'
+    const restUrl = endpoints.value.grpc || 'https://sentry.lcd.injective.network:443'
+
+    try {
+      await keplr.experimentalSuggestChain({
+        chainId: 'injective-1',
+        chainName: 'Injective',
+        rpc: rpcUrl,
+        rest: restUrl,
+        bip44: { coinType: 60 },
+        bech32Config: {
+          bech32PrefixAccAddr: 'inj',
+          bech32PrefixAccPub: 'injpub',
+          bech32PrefixValAddr: 'injvaloper',
+          bech32PrefixValPub: 'injvaloperpub',
+          bech32PrefixConsAddr: 'injvalcons',
+          bech32PrefixConsPub: 'injvalconspub',
+        },
+        currencies: [
+          { coinDenom: 'INJ', coinMinimalDenom: 'inj', coinDecimals: 18 },
+        ],
+        feeCurrencies: [
+          { coinDenom: 'INJ', coinMinimalDenom: 'inj', coinDecimals: 18, gasPriceStep: { low: 500000000, average: 750000000, high: 1000000000 } },
+        ],
+        stakeCurrency: { coinDenom: 'INJ', coinMinimalDenom: 'inj', coinDecimals: 18 },
+      })
+    } catch {
+      // chain suggestion rejected or already exists — ignore
+    }
+  }
+
   async function connect(walletId: WalletId) {
     connecting.value = true
     walletError.value = ''
@@ -184,8 +255,12 @@ export function useInjective() {
       const { walletStrategy, Wallet } = await getEngine()
       const target = walletId === 'leap' ? Wallet.Leap : Wallet.Keplr
       await walletStrategy.setWallet(target)
+
+      if (walletId === 'keplr') {
+        await suggestKeplrChain()
+      }
+
       const addresses = await walletStrategy.enableAndGetAddresses()
-      // For Cosmos wallets this is already an inj... bech32 address.
       address.value = addresses[0] ?? ''
       walletName.value = walletId
       if (address.value) await loadBalances()
@@ -245,10 +320,9 @@ export function useInjective() {
       markets.value = active
       registerMarketTokens(active)
       if (!selectedMarketId.value) {
-        // Default to a market with a dense, balanced testnet book so the depth
-        // chart and order book look alive out of the box. INJ/USDT is one click
-        // away in the list.
-        const prefer = ['TIA/USDT', 'INJ/USDT']
+        // Start on the flagship Injective spot market and fall back only if it
+        // is unavailable on the current endpoint.
+        const prefer = ['INJ/USDT', 'INJ/USDC', 'TIA/USDT']
         const pick =
           prefer
             .map((t) => active.find((m) => m.ticker === t))
@@ -268,6 +342,8 @@ export function useInjective() {
     orderbookBuys.value = []
     orderbookSells.value = []
     pricePoints.value = []
+    chartCandles.value = []
+    chartCandlesError.value = ''
     selectedMarketId.value = marketId
   }
 
@@ -315,6 +391,201 @@ export function useInjective() {
     }
   }
 
+  let chartCandlesRequestId = 0
+
+  // ---- historical candles (chart RPC / TradingView-compatible bars) ----
+  async function loadChartCandles(
+    resolution: ChartResolution = '5',
+    countback = 240,
+  ) {
+    const market = selectedMarket.value
+    if (!market?.marketId) return
+
+    const requestId = ++chartCandlesRequestId
+    chartCandlesLoading.value = true
+    chartCandlesError.value = ''
+
+    try {
+      const { chartApi } = await getEngine()
+      const to = Math.floor(Date.now() / 1000)
+      const res = await chartApi.spotMarketHistory({
+        symbol: '',
+        marketId: market.marketId,
+        resolution,
+        from: 0,
+        to,
+        countback,
+        fillGaps: false,
+      }).response
+
+      const candles: PriceCandle[] = (res.t ?? [])
+        .map((time: number, index: number) => ({
+          time,
+          open: Number(res.o?.[index]),
+          high: Number(res.h?.[index]),
+          low: Number(res.l?.[index]),
+          close: Number(res.c?.[index]),
+          volume: Number(res.v?.[index] ?? 0),
+        }))
+        .filter((c: PriceCandle) =>
+          c.time > 0 &&
+          [c.open, c.high, c.low, c.close, c.volume].every(Number.isFinite) &&
+          c.open > 0 &&
+          c.high > 0 &&
+          c.low > 0 &&
+          c.close > 0,
+        )
+        .sort((a: PriceCandle, b: PriceCandle) => a.time - b.time)
+
+      if (requestId === chartCandlesRequestId) {
+        chartCandles.value = candles
+        if (!candles.length && res.s && res.s !== 'ok') {
+          chartCandlesError.value = `Chart history unavailable: ${res.s}`
+        }
+      }
+    } catch (e: any) {
+      if (requestId === chartCandlesRequestId) {
+        chartCandlesError.value = e?.message || 'Failed to fetch chart history'
+      }
+    } finally {
+      if (requestId === chartCandlesRequestId) {
+        chartCandlesLoading.value = false
+      }
+    }
+  }
+
+  // ---- order submission (chain, gRPC-web) ----
+  const submitting = ref(false)
+
+  async function submitSpotOrder(
+    orderSide: 'buy' | 'sell',
+    humanPrice: number,
+    humanQuantity: number,
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    const market = selectedMarket.value
+    if (!market?.marketId) return { error: 'No market selected' }
+
+    submitting.value = true
+    try {
+      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/networks'),
+        import('@injectivelabs/wallet-core'),
+      ])
+
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+
+      const msg = sdk.MsgCreateSpotLimitOrder.fromJSON({
+        marketId: market.marketId,
+        subaccountId,
+        injectiveAddress: address.value,
+        orderType: orderSide === 'buy' ? sdk.OrderType.BUY : sdk.OrderType.SELL,
+        price: humanPrice.toString(),
+        quantity: humanQuantity.toString(),
+        feeRecipient: address.value,
+      })
+
+      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
+
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network: networks.Network.Mainnet,
+        endpoints,
+        walletStrategy,
+      })
+
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadBalances()
+      loadOrderbook()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  // ---- open orders (indexer) ----
+  const openOrders = useState<any[]>('inj-open-orders', () => [])
+  const ordersLoading = ref(false)
+
+  async function loadOpenOrders() {
+    if (!address.value) {
+      openOrders.value = []
+      return
+    }
+    ordersLoading.value = true
+    try {
+      const { spotApi } = await getEngine()
+      const sdk = await import('@injectivelabs/sdk-ts')
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+      const res = await spotApi.fetchOrders({ subaccountId })
+      openOrders.value = res.orders ?? []
+    } catch {
+      // transient — keep last
+    } finally {
+      ordersLoading.value = false
+    }
+  }
+
+  const cancellingIds = ref<Set<string>>(new Set())
+
+  async function cancelSpotOrder(
+    order: { marketId: string; orderHash: string; cid?: string },
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+
+    cancellingIds.value.add(order.orderHash)
+
+    try {
+      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/networks'),
+        import('@injectivelabs/wallet-core'),
+      ])
+
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+
+      const msg = sdk.MsgCancelSpotOrder.fromJSON({
+        marketId: order.marketId,
+        subaccountId,
+        injectiveAddress: address.value,
+        orderHash: order.orderHash,
+      })
+
+      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
+
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network: networks.Network.Mainnet,
+        endpoints,
+        walletStrategy,
+      })
+
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadOpenOrders()
+      loadBalances()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    } finally {
+      cancellingIds.value.delete(order.orderHash)
+    }
+  }
+
   return {
     // lifecycle
     init,
@@ -347,12 +618,25 @@ export function useInjective() {
     orderbookLoading,
     orderbookUpdatedAt,
     loadOrderbook,
+    fillPrice,
+    fillAmount,
     // trades / price series
     pricePoints,
     tradesLoading,
     loadTrades,
-    // meta
-    endpoints,
-    tokenRegistry,
+    // historical chart candles
+    chartCandles,
+    chartCandlesLoading,
+    chartCandlesError,
+    loadChartCandles,
+    // order submission
+    submitting,
+    submitSpotOrder,
+    // open orders
+    openOrders,
+    ordersLoading,
+    loadOpenOrders,
+    cancellingIds,
+    cancelSpotOrder,
   }
 }

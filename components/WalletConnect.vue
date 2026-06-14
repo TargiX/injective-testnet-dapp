@@ -17,76 +17,43 @@ async function copyAddress() {
     await navigator.clipboard.writeText(address.value)
     copied.value = true
     setTimeout(() => (copied.value = false), 1200)
-  } catch {
-    /* clipboard unavailable */
-  }
+  } catch { /* */ }
 }
 </script>
 
 <template>
-  <div class="wallet">
+  <div class="flex items-center gap-2 flex-wrap">
     <template v-if="!isConnected">
-      <button
-        class="btn btn-primary"
+      <UButton
+        :loading="connecting"
+        @click="connect('leap')"
+      >
+        {{ connecting ? 'Connecting…' : 'Connect Leap' }}
+      </UButton>
+      <UButton
+        variant="outline"
         :disabled="connecting"
         @click="connect('keplr')"
       >
-        {{ connecting ? 'Connecting…' : 'Connect Keplr' }}
-      </button>
-      <button
-        class="btn"
-        :disabled="connecting"
-        @click="connect('leap')"
-      >
-        Leap
-      </button>
+        Keplr
+      </UButton>
     </template>
 
     <template v-else>
-      <button class="addr num" :title="address" @click="copyAddress">
-        <span class="addr-wallet">{{ walletName }}</span>
-        <span>{{ shortAddress(address) }}</span>
-        <span class="addr-copy">{{ copied ? '✓' : '⧉' }}</span>
-      </button>
-      <button class="btn btn-ghost" @click="disconnect">Disconnect</button>
+      <UButton
+        variant="outline"
+        :title="address"
+        @click="copyAddress"
+      >
+        <span class="capitalize text-accent font-semibold">{{ walletName }}</span>
+        <span class="font-mono tabular-nums">{{ shortAddress(address) }}</span>
+        <span class="text-[var(--ui-text-dimmed)]">{{ copied ? '✓' : '⧉' }}</span>
+      </UButton>
+      <UButton variant="ghost" @click="disconnect">
+        Disconnect
+      </UButton>
     </template>
 
-    <span v-if="walletError" class="err wallet-err">{{ walletError }}</span>
+    <span v-if="walletError" class="text-ask text-xs max-w-[200px] truncate">{{ walletError }}</span>
   </div>
 </template>
-
-<style scoped>
-.wallet {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.addr {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-}
-.addr:hover {
-  border-color: var(--accent-dim);
-}
-.addr-wallet {
-  text-transform: capitalize;
-  color: var(--accent);
-  font-weight: 600;
-  font-family: var(--sans);
-}
-.addr-copy {
-  color: var(--text-dim);
-}
-.wallet-err {
-  flex-basis: 100%;
-}
-</style>

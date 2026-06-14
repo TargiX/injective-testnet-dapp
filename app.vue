@@ -1,9 +1,5 @@
-<script setup lang="ts">
-import '~/assets/css/main.css'
-</script>
-
 <template>
-  <div>
+  <UApp>
     <NuxtPage />
-  </div>
+  </UApp>
 </template>

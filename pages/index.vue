@@ -1,6 +1,5 @@
 <script setup lang="ts">
 const {
-  endpoints,
   init,
   loadMarkets,
   loadBalances,
@@ -9,189 +8,110 @@ const {
   selectedMarketId,
 } = useInjective()
 
+const toast = useToast()
+const bottomTab = ref<'orderbook' | 'balances'>('orderbook')
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(async () => {
-  await init()
-  // Markets first so the token registry is populated before we map balances.
-  await loadMarkets()
+async function pollCycle() {
   await Promise.all([loadOrderbook(), loadTrades()])
-  // Demo-address balances (read-only) so the panel shows real data with no wallet.
-  loadBalances()
-  // Light polling keeps the order book + depth feeling live without a socket.
-  pollTimer = setInterval(loadOrderbook, 2500)
+}
+
+onMounted(async () => {
+  try {
+    await init()
+    await loadMarkets()
+    await Promise.all([loadOrderbook(), loadTrades()])
+    loadBalances()
+    pollTimer = setInterval(() => {
+      pollCycle()
+      loadBalances()
+    }, 3000)
+  } catch (e: any) {
+    toast.add({ title: 'Init failed', description: e?.message, color: 'error' })
+  }
 })
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
 })
 
-// Reload book + price series whenever the selected market changes.
 watch(selectedMarketId, () => {
-  loadOrderbook()
-  loadTrades()
+  Promise.all([loadOrderbook(), loadTrades()])
 })
 </script>
 
 <template>
-  <div class="page">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">▚</div>
+  <div class="h-dvh flex flex-col bg-surface text-[var(--ui-text)] overflow-hidden">
+    <header class="flex-none flex items-center justify-between gap-4 px-5 py-3 border-b border-border-soft">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 grid place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-dim text-surface font-extrabold text-base">
+          ▚
+        </div>
         <div>
-          <h1>Injective Testnet dApp</h1>
-          <p class="faint sub">
-            Wallet · on-chain balance · live spot order book — via the
-            <code>injective-ts</code> gRPC-web SDK
+          <h1 class="text-sm font-bold tracking-tight leading-tight">Injective Trading</h1>
+          <p class="text-[11px] text-[var(--ui-text-muted)] leading-tight">
+            Wallet · balances · live order book ·
+            <code class="font-mono">injective-ts</code> gRPC-web
           </p>
         </div>
       </div>
-      <div class="topbar-right">
-        <span class="pill net">
-          <span class="dot" />
-          injective-888 · testnet
-        </span>
+      <div class="flex items-center gap-3">
+        <UBadge variant="subtle" color="success" size="sm">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-bid mr-1.5 shadow-glow-bid" />
+          injective-1 · mainnet
+        </UBadge>
         <WalletConnect />
       </div>
     </header>
 
-    <main class="layout">
-      <div class="col-left">
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-[260px_1fr_300px] gap-3 p-3 overflow-hidden">
+      <div class="min-h-0 overflow-hidden">
         <SpotMarkets />
       </div>
-      <div class="col-mid">
-        <PriceChart />
-        <OrderBook />
+      <div class="flex flex-col gap-3 overflow-hidden">
+        <div class="h-[45%] overflow-hidden">
+          <PriceChart />
+        </div>
+        <div class="flex-1 overflow-hidden flex flex-col rounded-lg bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
+          <div class="flex-none flex items-center gap-0.5 px-3 py-1.5 border-b border-border-soft">
+            <button
+              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              :class="bottomTab === 'orderbook' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+              @click="bottomTab = 'orderbook'"
+            >
+              Order Book
+            </button>
+            <button
+              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              :class="bottomTab === 'balances' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+              @click="bottomTab = 'balances'"
+            >
+              Balances
+            </button>
+          </div>
+          <div class="flex-1 overflow-hidden">
+            <OrderBook v-show="bottomTab === 'orderbook'" />
+            <BalancePanel v-show="bottomTab === 'balances'" />
+          </div>
+        </div>
       </div>
-      <div class="col-right">
-        <DepthChart />
-        <BalancePanel />
-        <section class="card endpoints">
-          <div class="card-head"><span class="card-title">gRPC-web Endpoints</span></div>
-          <dl>
-            <dt>chain</dt>
-            <dd class="num faint">{{ endpoints.grpc }}</dd>
-            <dt>indexer</dt>
-            <dd class="num faint">{{ endpoints.indexer }}</dd>
-          </dl>
-        </section>
+      <div class="flex flex-col gap-3 overflow-hidden">
+        <TradeForm />
+        <div class="flex-1 overflow-hidden">
+          <OpenOrders />
+        </div>
       </div>
     </main>
 
-    <footer class="foot faint">
-      Live data from Injective Testnet · injective-888
+    <footer class="flex-none flex items-center justify-between px-5 py-1.5 border-t border-border-soft text-[11px]">
+      <div class="flex items-center gap-1">
+        <span class="text-[var(--ui-text-dimmed)]">injective-1 · mainnet</span>
+      </div>
+      <UBadge variant="subtle" color="success" size="sm">
+        <span class="inline-block w-1.5 h-1.5 rounded-full bg-bid mr-1 shadow-glow-bid" />
+        Live
+      </UBadge>
     </footer>
   </div>
 </template>
-
-<style scoped>
-.page {
-  max-width: 1340px;
-  margin: 0 auto;
-  padding: 22px 22px 40px;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 20px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.logo {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #00c2a8, #0a6d8a);
-  color: #04130f;
-  font-size: 20px;
-  font-weight: 800;
-}
-h1 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.sub {
-  margin: 2px 0 0;
-  font-size: 12px;
-}
-.sub code,
-.endpoints code {
-  font-family: var(--mono);
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.pill.net .dot {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 194, 168, 0.18);
-}
-.layout {
-  display: grid;
-  grid-template-columns: 280px 1fr 320px;
-  gap: 16px;
-  align-items: start;
-  flex: 1;
-}
-.col-left :deep(.markets) {
-  height: 640px;
-}
-.col-mid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.col-right {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.endpoints dl {
-  margin: 0;
-  padding: 12px 16px 16px;
-}
-.endpoints dt {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-faint);
-  margin-top: 8px;
-}
-.endpoints dd {
-  margin: 2px 0 0;
-  font-size: 11px;
-  word-break: break-all;
-}
-.foot {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-soft);
-  font-size: 12px;
-  text-align: center;
-}
-@media (max-width: 1080px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-  .col-left :deep(.markets) {
-    height: 360px;
-  }
-}
-</style>

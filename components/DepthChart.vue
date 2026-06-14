@@ -6,7 +6,7 @@ const { orderbookBuys, orderbookSells, selectedMarket } = useInjective()
 const W = 320
 const H = 150
 const PAD = 4
-const LEVELS = 40 // levels per side closest to mid
+const LEVELS = 40
 
 const chart = computed(() => {
   const m = selectedMarket.value
@@ -31,23 +31,19 @@ const chart = computed(() => {
   const bestAsk = rawAsks[0].price
   const mid = (bestBid + bestAsk) / 2
 
-  // Focus on near-spread liquidity (±BAND of mid) so outlier orders far from
-  // the mid don't stretch the x-axis flat. Fall back to top-N if too sparse.
   const BAND = 0.35
   const lo = mid * (1 - BAND)
   const hi = mid * (1 + BAND)
   const cumulate = (levels: { price: number; size: number }[]) => {
     let band = levels.filter((l) => l.price >= lo && l.price <= hi)
-    if (band.length < 1) band = levels.slice(0, LEVELS) // only if nothing near mid
+    if (band.length < 1) band = levels.slice(0, LEVELS)
     let cum = 0
     return band.slice(0, LEVELS).map((l) => ({ price: l.price, cum: (cum += l.size) }))
   }
 
-  const bids = cumulate(rawBids) // best→worse (high→low price)
-  const asks = cumulate(rawAsks) // best→worse (low→high price)
+  const bids = cumulate(rawBids)
+  const asks = cumulate(rawAsks)
 
-  // Fixed, symmetric price domain around mid so the mid line stays centered and
-  // bids fill the left half / asks the right half — the classic depth look.
   const minPrice = lo
   const maxPrice = hi
   const spanPrice = maxPrice - minPrice || 1
@@ -58,7 +54,6 @@ const chart = computed(() => {
   const y = (c: number) => H - PAD - (c / maxCum) * (H - 2 * PAD)
   const baseY = H - PAD
 
-  // bids drawn from mid leftward: order low→high price for a left-to-right path
   const bidsAsc = [...bids].reverse()
   const bidPath =
     `M${x(bidsAsc[0].price).toFixed(1)},${baseY.toFixed(1)} ` +
@@ -88,16 +83,18 @@ const chart = computed(() => {
 </script>
 
 <template>
-  <section class="card depthchart">
-    <div class="card-head">
-      <span class="card-title">Depth</span>
-      <span v-if="chart" class="num faint mid">mid {{ fmtPrice(chart.mid) }}</span>
-    </div>
+  <UCard>
+    <template #header>
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Depth</span>
+        <span v-if="chart" class="font-mono tabular-nums text-xs text-[var(--ui-text-dimmed)]">mid {{ fmtPrice(chart.mid) }}</span>
+      </div>
+    </template>
 
-    <div v-if="!chart" class="state muted">Waiting for order book…</div>
+    <div v-if="!chart" class="py-10 text-center text-sm text-[var(--ui-text-muted)]">Waiting for order book…</div>
 
-    <div v-else class="svg-wrap">
-      <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" class="svg">
+    <div v-else class="px-2.5 pt-2 pb-1">
+      <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" class="block w-full h-[150px]">
         <defs>
           <linearGradient id="bidFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#1fb87a" stop-opacity="0.32" />
@@ -123,42 +120,11 @@ const chart = computed(() => {
           vector-effect="non-scaling-stroke"
         />
       </svg>
-      <div class="axis">
-        <span class="num bid">{{ fmtPrice(chart.minPrice) }}</span>
-        <span class="num faint">cum size · max {{ fmt(chart.maxCum, 0) }}</span>
-        <span class="num ask">{{ fmtPrice(chart.maxPrice) }}</span>
+      <div class="flex items-center justify-between text-[10px] font-mono tabular-nums px-1 pt-1">
+        <span class="text-bid">{{ fmtPrice(chart.minPrice) }}</span>
+        <span class="text-[var(--ui-text-dimmed)]">cum size · max {{ fmt(chart.maxCum, 0) }}</span>
+        <span class="text-ask">{{ fmtPrice(chart.maxPrice) }}</span>
       </div>
     </div>
-  </section>
+  </UCard>
 </template>
-
-<style scoped>
-.mid {
-  font-size: 12px;
-}
-.svg-wrap {
-  padding: 10px 10px 6px;
-}
-.svg {
-  display: block;
-  width: 100%;
-  height: 150px;
-}
-.axis {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 4px 2px;
-  font-size: 10px;
-}
-.bid {
-  color: var(--bid);
-}
-.ask {
-  color: var(--ask);
-}
-.state {
-  padding: 40px 16px;
-  text-align: center;
-}
-</style>
