@@ -155,6 +155,15 @@ export function useInjective() {
   const chartCandlesLoading = useState<boolean>('inj-chart-candles-loading', () => false)
   const chartCandlesError = useState<string>('inj-chart-candles-error', () => '')
 
+  const marketStats = useState<{
+    lastPrice: number
+    changePct: number
+    high: number
+    low: number
+    volume: number
+    quoteVolume: number
+  } | null>('inj-market-stats', () => null)
+
   const fillPrice = useState<number | null>('inj-fill-price', () => null)
   const fillAmount = useState<number | null>('inj-fill-amount', () => null)
 
@@ -342,7 +351,9 @@ export function useInjective() {
     orderbookBuys.value = []
     orderbookSells.value = []
     pricePoints.value = []
+    recentTrades.value = []
     chartCandles.value = []
+    marketStats.value = null
     chartCandlesError.value = ''
     selectedMarketId.value = marketId
   }
@@ -366,6 +377,8 @@ export function useInjective() {
   }
 
   // ---- recent trades → price series (indexer, gRPC-web) ----
+  const recentTrades = useState<any[]>('inj-recent-trades', () => [])
+
   async function loadTrades() {
     const market = selectedMarket.value
     if (!market || !market.baseToken || !market.quoteToken) return
@@ -376,6 +389,9 @@ export function useInjective() {
       const list: any[] = res.trades ?? res ?? []
       const bd = market.baseToken.decimals
       const qd = market.quoteToken.decimals
+
+      recentTrades.value = list
+
       const points = list
         .map((t) => ({
           t: Number(t.executedAt),
@@ -451,6 +467,55 @@ export function useInjective() {
       if (requestId === chartCandlesRequestId) {
         chartCandlesLoading.value = false
       }
+    }
+  }
+
+  // ---- 24h market stats from hourly candles ----
+  async function loadMarketStats() {
+    const market = selectedMarket.value
+    if (!market?.marketId) return
+
+    try {
+      const { chartApi } = await getEngine()
+      const to = Math.floor(Date.now() / 1000)
+      const res = await chartApi.spotMarketHistory({
+        symbol: '',
+        marketId: market.marketId,
+        resolution: '60',
+        from: 0,
+        to,
+        countback: 24,
+        fillGaps: false,
+      }).response
+
+      const times = res.t ?? []
+      if (!times.length) return
+
+      const opens = (res.o ?? []).map(Number)
+      const highs = (res.h ?? []).map(Number)
+      const lows = (res.l ?? []).map(Number)
+      const closes = (res.c ?? []).map(Number)
+      const vols = (res.v ?? []).map(Number)
+
+      const valid = times.map((_, i) => i).filter(i =>
+        opens[i] > 0 && closes[i] > 0 && isFinite(opens[i]) && isFinite(closes[i])
+      )
+      if (!valid.length) return
+
+      const lastClose = closes[valid[valid.length - 1]]
+      const firstOpen = opens[valid[0]]
+      const changePct = firstOpen ? ((lastClose - firstOpen) / firstOpen) * 100 : 0
+
+      marketStats.value = {
+        lastPrice: lastClose,
+        changePct,
+        high: Math.max(...valid.map(i => highs[i])),
+        low: Math.min(...valid.map(i => lows[i])),
+        volume: valid.reduce((sum, i) => sum + (vols[i] || 0), 0),
+        quoteVolume: valid.reduce((sum, i) => sum + (vols[i] || 0) * closes[i], 0),
+      }
+    } catch {
+      // transient — keep last
     }
   }
 
@@ -624,11 +689,14 @@ export function useInjective() {
     pricePoints,
     tradesLoading,
     loadTrades,
+    recentTrades,
     // historical chart candles
     chartCandles,
     chartCandlesLoading,
     chartCandlesError,
     loadChartCandles,
+    marketStats,
+    loadMarketStats,
     // order submission
     submitting,
     submitSpotOrder,

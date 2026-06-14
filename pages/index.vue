@@ -5,11 +5,12 @@ const {
   loadBalances,
   loadOrderbook,
   loadTrades,
+  loadMarketStats,
   selectedMarketId,
 } = useInjective()
 
 const toast = useToast()
-const bottomTab = ref<'orderbook' | 'balances'>('orderbook')
+const bottomTab = ref<'orderbook' | 'trades' | 'balances'>('orderbook')
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -23,9 +24,11 @@ onMounted(async () => {
     await loadMarkets()
     await Promise.all([loadOrderbook(), loadTrades()])
     loadBalances()
+    loadMarketStats()
     pollTimer = setInterval(() => {
       pollCycle()
       loadBalances()
+      loadMarketStats()
     }, 3000)
   } catch (e: any) {
     toast.add({ title: 'Init failed', description: e?.message, color: 'error' })
@@ -38,6 +41,7 @@ onBeforeUnmount(() => {
 
 watch(selectedMarketId, () => {
   Promise.all([loadOrderbook(), loadTrades()])
+  loadMarketStats()
 })
 </script>
 
@@ -65,6 +69,8 @@ watch(selectedMarketId, () => {
       </div>
     </header>
 
+    <MarketStats />
+
     <main class="flex-1 grid grid-cols-1 lg:grid-cols-[260px_1fr_300px] gap-3 p-3 overflow-hidden">
       <div class="min-h-0 overflow-hidden">
         <SpotMarkets />
@@ -84,6 +90,13 @@ watch(selectedMarketId, () => {
             </button>
             <button
               class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              :class="bottomTab === 'trades' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+              @click="bottomTab = 'trades'"
+            >
+              Trades
+            </button>
+            <button
+              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
               :class="bottomTab === 'balances' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
               @click="bottomTab = 'balances'"
             >
@@ -92,6 +105,7 @@ watch(selectedMarketId, () => {
           </div>
           <div class="flex-1 overflow-hidden">
             <OrderBook v-show="bottomTab === 'orderbook'" />
+            <TradeHistory v-show="bottomTab === 'trades'" />
             <BalancePanel v-show="bottomTab === 'balances'" />
           </div>
         </div>
