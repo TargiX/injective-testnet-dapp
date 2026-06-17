@@ -147,6 +147,20 @@ export function useInjective() {
   const orderbookLoading = useState<boolean>('inj-ob-loading', () => false)
   const orderbookUpdatedAt = useState<number>('inj-ob-updated', () => 0)
 
+  // Connection health: derived from how recently the orderbook refreshed.
+  // The poll cycle (index.vue, ~3s) updates latencyMs/connectionState on each
+  // tick; this computed is the reactive source of truth for the indicator.
+  const latencyMs = useState<number>('inj-latency', () => 0)
+  const lastPollAt = useState<number>('inj-last-poll', () => 0)
+  const connectionState = computed<'connecting' | 'live' | 'stale' | 'offline'>(() => {
+    const updated = orderbookUpdatedAt.value
+    if (!updated) return 'connecting'
+    const ageMs = Date.now() - updated
+    if (ageMs < 6000) return 'live'        // ~2 poll cycles fresh
+    if (ageMs < 15000) return 'stale'      // lagging but reachable
+    return 'offline'                       // book hasn't moved in 5+ cycles
+  })
+
   // Recent trades are live market activity. Historical OHLCV chart data is
   // loaded separately through InjectiveChartRPC below.
   const pricePoints = useState<PricePoint[]>('inj-price-points', () => [])
@@ -682,6 +696,9 @@ export function useInjective() {
     orderbookSells,
     orderbookLoading,
     orderbookUpdatedAt,
+    latencyMs,
+    lastPollAt,
+    connectionState,
     loadOrderbook,
     fillPrice,
     fillAmount,

@@ -7,6 +7,8 @@ const {
   loadTrades,
   loadMarketStats,
   selectedMarketId,
+  latencyMs,
+  lastPollAt,
 } = useInjective()
 
 const toast = useToast()
@@ -15,7 +17,16 @@ const bottomTab = ref<'orderbook' | 'trades' | 'balances'>('orderbook')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 async function pollCycle() {
-  await Promise.all([loadOrderbook(), loadTrades()])
+  const started = Date.now()
+  lastPollAt.value = started
+  try {
+    await Promise.all([loadOrderbook(), loadTrades()])
+    latencyMs.value = Date.now() - started
+  } catch {
+    // loadOrderbook/loadTrades swallow their own errors, so a throw here
+    // would mean a deeper (transport) failure — surface it via latency spike.
+    latencyMs.value = Date.now() - started
+  }
 }
 
 onMounted(async () => {
@@ -65,6 +76,7 @@ watch(selectedMarketId, () => {
           <span class="inline-block w-1.5 h-1.5 rounded-full bg-bid mr-1.5 shadow-glow-bid" />
           injective-1 · mainnet
         </UBadge>
+        <ConnectionIndicator class="hidden sm:flex" />
         <WalletConnect />
       </div>
     </header>
@@ -122,10 +134,7 @@ watch(selectedMarketId, () => {
       <div class="flex items-center gap-1">
         <span class="text-[var(--ui-text-dimmed)]">injective-1 · mainnet</span>
       </div>
-      <UBadge variant="subtle" color="success" size="sm">
-        <span class="inline-block w-1.5 h-1.5 rounded-full bg-bid mr-1 shadow-glow-bid" />
-        Live
-      </UBadge>
+      <ConnectionIndicator />
     </footer>
   </div>
 </template>
