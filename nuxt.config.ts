@@ -25,15 +25,22 @@ export default defineNuxtConfig({
       title: 'Injective Trading Terminal',
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'manifest', href: '/manifest.webmanifest' },
+        { rel: 'apple-touch-icon', href: '/icon-192.png' },
       ],
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         {
           name: 'description',
           content:
             'Nuxt/TypeScript trading terminal on Injective (Cosmos): live order book, candlestick charts, spot trading via injective-ts gRPC-web SDK.',
         },
+        { name: 'theme-color', content: '#0b0e13' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-title', content: 'Injective' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
       ],
     },
   },
