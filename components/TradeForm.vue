@@ -35,6 +35,10 @@ const confirmOpen = ref(false)
 const confirming = ref(false)
 const pendingOrder = ref<PendingOrder | null>(null)
 
+// refs to inputs so keyboard shortcuts (B/S) can focus them, and Esc can blur.
+const priceInputEl = ref<HTMLInputElement | null>(null)
+const amountInputEl = ref<HTMLInputElement | null>(null)
+
 const bestAsk = computed(() => {
   const m = selectedMarket.value
   if (!m?.baseToken || !m?.quoteToken) return 0
@@ -159,6 +163,29 @@ async function confirmOrder() {
   }
 }
 
+// Keyboard shortcuts. `b`/`s` only fire when not typing in an input
+// (defineShortcuts auto-disables letter shortcuts inside inputs); `escape`
+// uses usingInput:true so it clears the focused price/amount field too.
+// Enter is handled per-input (@keydown.enter) since you're typing when you press it.
+function focusPrice() {
+  // If market type hides the price input, focus amount instead.
+  (priceInputEl.value ?? amountInputEl.value)?.focus()
+}
+
+defineShortcuts({
+  'b': () => { side.value = 'buy'; nextTick(focusPrice) },
+  's': () => { side.value = 'sell'; nextTick(focusPrice) },
+  'escape': {
+    handler: () => {
+      priceInput.value = ''
+      amountInput.value = ''
+      priceInputEl.value?.blur()
+      amountInputEl.value?.blur()
+    },
+    usingInput: true,
+  },
+})
+
 watch(fillPrice, (v) => {
   if (v != null && v > 0) {
     priceInput.value = String(v)
@@ -251,11 +278,13 @@ watch(selectedMarket, () => {
               −
             </button>
             <input
+              ref="priceInputEl"
               v-model="priceInput"
               type="text"
               inputmode="decimal"
               :placeholder="fmtPrice(defaultPrice)"
               class="flex-1 bg-transparent py-1.5 text-sm font-mono tabular-nums text-center outline-none"
+              @keydown.enter.prevent="amountInputEl?.focus()"
             />
             <button
               class="flex-none w-8 flex items-center justify-center text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text)] transition-colors"
@@ -275,11 +304,13 @@ watch(selectedMarket, () => {
           <span class="text-[10px] text-[var(--ui-text-dimmed)] uppercase tracking-wider">Amount ({{ baseSymbol }})</span>
           <div class="mt-0.5 flex items-center rounded-md bg-surface-2 border border-border-soft focus-within:border-accent-dim transition-colors">
             <input
+              ref="amountInputEl"
               v-model="amountInput"
               type="text"
               inputmode="decimal"
               placeholder="0.00"
               class="flex-1 bg-transparent px-2.5 py-1.5 text-sm font-mono tabular-nums outline-none"
+              @keydown.enter.prevent="submitOrder"
             />
           </div>
         </div>
@@ -324,6 +355,15 @@ watch(selectedMarket, () => {
 
         <div v-if="isDemo && !isConnected" class="text-[10px] text-center text-[var(--ui-text-dimmed)]">
           Demo mode — connect Keplr to trade
+        </div>
+
+        <div class="hidden lg:flex items-center justify-center gap-2 pt-1 text-[10px] text-[var(--ui-text-dimmed)]">
+          <kbd class="px-1.5 py-0.5 rounded bg-surface-2 border border-border-soft font-mono">B</kbd>
+          <span>buy</span>
+          <kbd class="px-1.5 py-0.5 rounded bg-surface-2 border border-border-soft font-mono">S</kbd>
+          <span>sell</span>
+          <kbd class="px-1.5 py-0.5 rounded bg-surface-2 border border-border-soft font-mono">Esc</kbd>
+          <span>clear</span>
         </div>
       </template>
     </div>
