@@ -18,11 +18,22 @@ const toast = useToast()
 
 type OrderSide = 'buy' | 'sell'
 type OrderType = 'limit' | 'market'
+interface PendingOrder {
+  side: OrderSide
+  price: number
+  amount: number
+  total: number
+  orderType: OrderType
+}
 
 const side = ref<OrderSide>('buy')
 const orderType = ref<OrderType>('limit')
 const priceInput = ref('')
 const amountInput = ref('')
+
+const confirmOpen = ref(false)
+const confirming = ref(false)
+const pendingOrder = ref<PendingOrder | null>(null)
 
 const bestAsk = computed(() => {
   const m = selectedMarket.value
@@ -114,15 +125,34 @@ function setPercent(pct: number) {
   }
 }
 
-async function submitOrder() {
+// Stage 1: build a pending order and open the confirm modal (no signing yet).
+function submitOrder() {
   if (!price.value || !amount.value) return
-  const result = await submitSpotOrder(side.value, price.value, amount.value)
+  pendingOrder.value = {
+    side: side.value,
+    price: price.value,
+    amount: amount.value,
+    total: total.value,
+    orderType: orderType.value,
+  }
+  confirmOpen.value = true
+}
+
+// Stage 2: user confirmed — now sign + broadcast.
+async function confirmOrder() {
+  const p = pendingOrder.value
+  if (!p) return
+  confirming.value = true
+  const result = await submitSpotOrder(p.side, p.price, p.amount)
+  confirming.value = false
   if ('error' in result) {
+    confirmOpen.value = false
     toast.add({ title: 'Order failed', description: result.error, color: 'error' })
   } else {
+    confirmOpen.value = false
     toast.add({
-      title: `${side.value === 'buy' ? 'Buy' : 'Sell'} placed`,
-      description: `${fmt(amount.value, 4)} ${baseSymbol.value} @ ${fmtPrice(price.value)} ${quoteSymbol.value}`,
+      title: `${p.side === 'buy' ? 'Buy' : 'Sell'} placed`,
+      description: `${fmt(p.amount, 4)} ${baseSymbol.value} @ ${fmtPrice(p.price)} ${quoteSymbol.value}`,
       color: 'success',
     })
     amountInput.value = ''
@@ -278,10 +308,10 @@ watch(selectedMarket, () => {
           :class="side === 'buy'
             ? 'bg-bid/20 text-bid hover:bg-bid/30'
             : 'bg-ask/20 text-ask hover:bg-ask/30'"
-          :disabled="!price || !amount || submitting || (!isConnected && !isDemo)"
+          :disabled="!price || !amount || submitting || confirming || (!isConnected && !isDemo)"
           @click="submitOrder"
         >
-          <template v-if="submitting">
+          <template v-if="confirming">
             Signing…
           </template>
           <template v-else-if="!isConnected && !isDemo">
@@ -298,4 +328,76 @@ watch(selectedMarket, () => {
       </template>
     </div>
   </div>
+
+  <UModal
+    v-model:open="confirmOpen"
+    :ui="{ content: 'max-w-sm' }"
+    :close="!confirming"
+    :dismissible="!confirming"
+  >
+    <template #title>
+      <span
+        class="text-base font-bold uppercase tracking-wide"
+        :class="pendingOrder?.side === 'buy' ? 'text-bid' : 'text-ask'"
+      >
+        Confirm {{ pendingOrder?.side === 'buy' ? 'Buy' : 'Sell' }}
+      </span>
+    </template>
+
+    <template #body>
+      <div v-if="pendingOrder" class="space-y-2.5">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-[var(--ui-text-muted)]">Market</span>
+          <span class="font-semibold">{{ baseSymbol }}/{{ quoteSymbol }}</span>
+        </div>
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-[var(--ui-text-muted)]">Type</span>
+          <span class="font-semibold uppercase">{{ pendingOrder.orderType }}</span>
+        </div>
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-[var(--ui-text-muted)]">Price</span>
+          <span class="font-mono tabular-nums">{{ fmtPrice(pendingOrder.price) }} {{ quoteSymbol }}</span>
+        </div>
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-[var(--ui-text-muted)]">Amount</span>
+          <span class="font-mono tabular-nums">{{ fmt(pendingOrder.amount, 4) }} {{ baseSymbol }}</span>
+        </div>
+        <div class="h-px bg-border-soft my-1" />
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-[var(--ui-text-muted)]">Total</span>
+          <span class="font-mono tabular-nums text-base font-bold">
+            {{ fmt(pendingOrder.total, 4) }}
+            <span class="text-[var(--ui-text-muted)] text-sm font-normal">{{ quoteSymbol }}</span>
+          </span>
+        </div>
+        <p class="pt-1 text-[11px] text-[var(--ui-text-dimmed)] leading-snug">
+          Confirming will request a signature in your wallet extension.
+        </p>
+      </div>
+    </template>
+
+    <template #footer="{ close }">
+      <div class="flex w-full gap-2">
+        <UButton
+          block
+          color="neutral"
+          variant="subtle"
+          :disabled="confirming"
+          @click="close"
+        >
+          Cancel
+        </UButton>
+        <UButton
+          block
+          :color="pendingOrder?.side === 'buy' ? 'success' : 'error'"
+          :loading="confirming"
+          :disabled="confirming"
+          @click="confirmOrder"
+        >
+          <span v-if="!confirming">Confirm {{ pendingOrder?.side === 'buy' ? 'Buy' : 'Sell' }}</span>
+          <span v-else>Signing…</span>
+        </UButton>
+      </div>
+    </template>
+  </UModal>
 </template>
