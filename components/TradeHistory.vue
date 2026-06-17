@@ -44,24 +44,24 @@ const rows = computed<TradeRow[]>(() => {
     </div>
 
     <template v-else>
-      <div class="flex-none grid grid-cols-[1fr_1fr_1fr_auto] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
-        <span>Price ({{ baseSymbol ? '' : '' }})</span>
+      <div class="flex-none grid grid-cols-[1fr_1fr_1fr_auto] max-lg:grid-cols-[1fr_1fr_auto] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
+        <span>Price</span>
         <span class="text-right">Amount</span>
-        <span class="text-right">Total</span>
-        <span class="text-right w-16">Time</span>
+        <span class="text-right max-lg:hidden">Total</span>
+        <span class="text-right w-14 max-lg:w-12">Time</span>
       </div>
       <div class="flex-1 overflow-y-auto min-h-0">
         <div
           v-for="(r, i) in rows"
           :key="i"
-          class="grid grid-cols-[1fr_1fr_1fr_auto] px-3 py-[2px] text-[11px] border-b border-border-soft last:border-b-0"
+          class="grid grid-cols-[1fr_1fr_1fr_auto] max-lg:grid-cols-[1fr_1fr_auto] px-3 py-[2px] text-[11px] max-lg:text-[10px] border-b border-border-soft last:border-b-0"
         >
-          <span class="font-mono tabular-nums font-semibold" :class="r.side === 'buy' ? 'text-bid' : 'text-ask'">
+          <span class="font-mono tabular-nums font-semibold truncate" :class="r.side === 'buy' ? 'text-bid' : 'text-ask'">
             {{ fmtPrice(r.price) }}
           </span>
-          <span class="font-mono tabular-nums text-right">{{ fmt(r.size, 4) }}</span>
-          <span class="font-mono tabular-nums text-right text-[var(--ui-text-muted)]">{{ fmt(r.total, 2) }}</span>
-          <span class="font-mono tabular-nums text-right text-[var(--ui-text-dimmed)] w-16">{{ r.time }}</span>
+          <span class="font-mono tabular-nums text-right truncate">{{ fmt(r.size, 4) }}</span>
+          <span class="font-mono tabular-nums text-right text-[var(--ui-text-muted)] max-lg:hidden">{{ fmt(r.total, 2) }}</span>
+          <span class="font-mono tabular-nums text-right text-[var(--ui-text-dimmed)] w-14 max-lg:w-12">{{ r.time }}</span>
         </div>
       </div>
     </template>

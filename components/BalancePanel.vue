@@ -67,11 +67,11 @@ const visible = computed(() =>
           :key="b.denom"
           class="grid grid-cols-[1fr_1fr_auto] items-center px-3 py-1.5 border-b border-border-soft last:border-b-0"
         >
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 min-w-0">
             <TokenIcon :logo="b.logo" :symbol="b.symbol" :size="18" />
-            <span class="font-semibold text-[12px]">{{ b.symbol }}</span>
+            <span class="font-semibold text-[12px] truncate">{{ b.symbol }}</span>
           </div>
-          <span class="text-right font-mono tabular-nums text-[12px]">{{ fmt(b.human, 4) }}</span>
+          <span class="text-right font-mono tabular-nums text-[12px] max-lg:text-[11px] truncate">{{ fmt(b.human, 4) }}</span>
           <span class="text-right w-14">
             <span class="text-[9px] font-semibold uppercase tracking-wider text-[var(--ui-text-dimmed)] bg-surface-2 rounded-full px-1.5 py-0.5">
               {{ denomKind(b.denom) }}

@@ -94,19 +94,19 @@ const updatedLabel = computed(() => {
     <div v-if="!selectedMarket" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">Select a market.</div>
 
     <template v-else>
-      <div class="flex-none grid grid-cols-[1.2fr_1fr_1fr] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
+      <div class="flex-none grid grid-cols-[1.2fr_1fr_1fr] max-lg:grid-cols-[1.2fr_1fr] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
         <span>Price</span>
         <span class="text-right">Size</span>
-        <span class="text-right">Sum</span>
+        <span class="text-right max-lg:hidden">Sum</span>
       </div>
 
       <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div class="flex-1 overflow-y-auto min-h-0">
-          <div v-for="(r, i) in book.asks" :key="'a' + i" class="relative grid grid-cols-[1.2fr_1fr_1fr] px-3 py-[2px] text-[11px] cursor-pointer hover:brightness-125 transition-all" @click="fillPrice = r.price; fillAmount = null">
+          <div v-for="(r, i) in book.asks" :key="'a' + i" class="relative grid grid-cols-[1.2fr_1fr_1fr] max-lg:grid-cols-[1.2fr_1fr] px-3 py-[2px] text-[11px] cursor-pointer hover:brightness-125 transition-all" @click="fillPrice = r.price; fillAmount = null">
             <div class="absolute inset-0 right-0 bg-ask-bg" :style="{ width: r.depth * 100 + '%' }" />
-            <span class="relative font-mono tabular-nums font-semibold text-ask">{{ fmtPrice(r.price) }}</span>
-            <span class="relative font-mono tabular-nums text-right">{{ fmt(r.size, 3) }}</span>
-            <span class="relative font-mono tabular-nums text-right text-[var(--ui-text-dimmed)]">{{ fmt(r.cum, 2) }}</span>
+            <span class="relative font-mono tabular-nums font-semibold text-ask truncate">{{ fmtPrice(r.price) }}</span>
+            <span class="relative font-mono tabular-nums text-right truncate">{{ fmt(r.size, 3) }}</span>
+            <span class="relative font-mono tabular-nums text-right text-[var(--ui-text-dimmed)] max-lg:hidden">{{ fmt(r.cum, 2) }}</span>
           </div>
         </div>
 
@@ -122,11 +122,11 @@ const updatedLabel = computed(() => {
         </div>
 
         <div class="flex-1 overflow-y-auto min-h-0">
-          <div v-for="(r, i) in book.bids" :key="'b' + i" class="relative grid grid-cols-[1.2fr_1fr_1fr] px-3 py-[2px] text-[11px] cursor-pointer hover:brightness-125 transition-all" @click="fillPrice = r.price; fillAmount = null">
+          <div v-for="(r, i) in book.bids" :key="'b' + i" class="relative grid grid-cols-[1.2fr_1fr_1fr] max-lg:grid-cols-[1.2fr_1fr] px-3 py-[2px] text-[11px] cursor-pointer hover:brightness-125 transition-all" @click="fillPrice = r.price; fillAmount = null">
             <div class="absolute inset-0 right-0 bg-bid-bg" :style="{ width: r.depth * 100 + '%' }" />
-            <span class="relative font-mono tabular-nums font-semibold text-bid">{{ fmtPrice(r.price) }}</span>
-            <span class="relative font-mono tabular-nums text-right">{{ fmt(r.size, 3) }}</span>
-            <span class="relative font-mono tabular-nums text-right text-[var(--ui-text-dimmed)]">{{ fmt(r.cum, 2) }}</span>
+            <span class="relative font-mono tabular-nums font-semibold text-bid truncate">{{ fmtPrice(r.price) }}</span>
+            <span class="relative font-mono tabular-nums text-right truncate">{{ fmt(r.size, 3) }}</span>
+            <span class="relative font-mono tabular-nums text-right text-[var(--ui-text-dimmed)] max-lg:hidden">{{ fmt(r.cum, 2) }}</span>
           </div>
         </div>
       </div>

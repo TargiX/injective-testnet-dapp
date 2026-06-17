@@ -130,33 +130,33 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
-      <div class="flex-none grid grid-cols-[1fr_1fr_1fr_1fr_auto] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
+      <div class="flex-none grid grid-cols-[1fr_1fr_1fr_1fr_auto] max-lg:grid-cols-[1fr_1fr_1fr_auto] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
         <span>Market</span>
         <span class="text-right">Price</span>
         <span class="text-right">Filled</span>
-        <span class="text-right">Total</span>
+        <span class="text-right max-lg:hidden">Total</span>
         <span class="w-10"></span>
       </div>
       <div class="flex-1 overflow-y-auto min-h-0">
         <div
           v-for="r in rows"
           :key="r.orderHash"
-          class="grid grid-cols-[1fr_1fr_1fr_1fr_auto] items-center px-3 py-1.5 border-b border-border-soft last:border-b-0"
+          class="grid grid-cols-[1fr_1fr_1fr_1fr_auto] max-lg:grid-cols-[1fr_1fr_1fr_auto] items-center px-3 py-1.5 border-b border-border-soft last:border-b-0"
         >
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 min-w-0">
             <span
-              class="text-[9px] font-bold uppercase px-1 py-0.5 rounded"
+              class="text-[9px] font-bold uppercase px-1 py-0.5 rounded flex-none"
               :class="r.side === 'buy' ? 'bg-bid/15 text-bid' : 'bg-ask/15 text-ask'"
             >
               {{ r.side === 'buy' ? 'B' : 'S' }}
             </span>
-            <span class="text-[11px] font-semibold">{{ r.ticker }}</span>
+            <span class="text-[11px] max-lg:text-[10px] font-semibold truncate">{{ r.ticker }}</span>
           </div>
-          <span class="text-right font-mono tabular-nums text-[11px]">{{ fmtPrice(r.price) }}</span>
-          <span class="text-right font-mono tabular-nums text-[11px] text-[var(--ui-text-muted)]">
+          <span class="text-right font-mono tabular-nums text-[11px] max-lg:text-[10px] truncate">{{ fmtPrice(r.price) }}</span>
+          <span class="text-right font-mono tabular-nums text-[11px] max-lg:text-[10px] text-[var(--ui-text-muted)] truncate">
             {{ fmt(r.filled, 4) }}<span class="text-[var(--ui-text-dimmed)]">/{{ fmt(r.total, 4) }}</span>
           </span>
-          <span class="text-right font-mono tabular-nums text-[11px]">{{ fmt(r.total * r.price, 2) }}</span>
+          <span class="text-right font-mono tabular-nums text-[11px] max-lg:hidden">{{ fmt(r.total * r.price, 2) }}</span>
           <span class="w-10 flex justify-end">
             <UButton
               size="xs"

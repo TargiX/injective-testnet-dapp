@@ -11,7 +11,7 @@ const isUp = computed(() => (marketStats.value?.changePct ?? 0) >= 0)
 </script>
 
 <template>
-  <div v-if="selectedMarket" class="flex-none flex items-center gap-5 px-5 py-1.5 border-b border-border-soft bg-[var(--ui-bg)] text-[11px]">
+  <div v-if="selectedMarket" class="flex-none flex items-center gap-3 lg:gap-5 px-3 lg:px-5 py-1.5 border-b border-border-soft bg-[var(--ui-bg)] text-[11px]">
     <div class="flex items-center gap-1.5">
       <TokenIcon :logo="(selectedMarket.baseToken as any)?.logo" :symbol="baseSymbol" :size="16" />
       <span class="font-bold text-[12px]">{{ ticker }}</span>
