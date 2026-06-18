@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import vue from '@vitejs/plugin-vue'
 
 // Plain vitest config (no Nuxt environment). We resolve the `~`/`~~` aliases
 // to the project root so imports like `~/utils/inj-format` work, and stub the
@@ -8,6 +9,7 @@ import { defineConfig } from 'vitest/config'
 // full Nuxt runtime, which keeps the suite fast and decoupled from the
 // vite-plugin-node-polyfills gRPC plumbing.
 export default defineConfig({
+  plugins: [vue()],
   resolve: {
     alias: {
       '~': fileURLToPath(new URL('./', import.meta.url)),
