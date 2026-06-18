@@ -115,6 +115,19 @@ interface Engine {
 
 let enginePromise: Promise<Engine> | null = null
 
+/**
+ * @internal test-only — swap the engine singleton so unit tests can inject a
+ * mock without hitting the real Injective gRPC endpoints. Only imported from
+ * tests; production code never calls this.
+ */
+export function __setEngineForTesting(engine: Partial<Engine>) {
+  enginePromise = Promise.resolve(engine as Engine)
+}
+/** @internal test-only — reset the singleton between tests. */
+export function __resetEngineForTesting() {
+  enginePromise = null
+}
+
 async function createEngine(): Promise<Engine> {
   const [
     sdk,
