@@ -735,6 +735,40 @@ export function useInjective() {
     }
   }
 
+  // ---- shared broadcast helper (chain, gRPC-web) ----
+  // Every order/deposit/IBC transfer builds a MsgBase and signs it through the
+  // same MsgBroadcaster over walletStrategy. Centralizing the boilerplate keeps
+  // the call sites short and the rejected/error message normalization uniform.
+  // `msgs` may be a single message or an array; MsgBroadcaster accepts both.
+  async function broadcastMsg(
+    msgs: any | any[],
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    try {
+      const [{ walletStrategy }, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/wallet-core'),
+      ])
+      const { network, endpoints } = await getNetwork()
+
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network,
+        endpoints,
+        walletStrategy,
+      })
+
+      const response = await broadcaster.broadcast({
+        msgs,
+        injectiveAddress: address.value,
+      })
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    }
+  }
+
   // ---- order submission (chain, gRPC-web) ----
   const submitting = ref(false)
 
@@ -749,12 +783,7 @@ export function useInjective() {
 
     submitting.value = true
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
 
@@ -768,21 +797,13 @@ export function useInjective() {
         feeRecipient: address.value,
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadBalances()
       loadOrderbook()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -809,12 +830,7 @@ export function useInjective() {
 
     submitting.value = true
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const raw = market.raw as any
       const tens = sdk.getDerivativeMarketTensMultiplier({
@@ -857,22 +873,14 @@ export function useInjective() {
         feeRecipient: address.value,
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadBalances()
       loadSubaccountBalances()
       loadOrderbook()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -914,12 +922,7 @@ export function useInjective() {
     cancellingIds.value.add(order.orderHash)
 
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
 
@@ -930,21 +933,13 @@ export function useInjective() {
         orderHash: order.orderHash,
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadOpenOrders()
       loadBalances()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -996,12 +991,7 @@ export function useInjective() {
     const quoteDecimals = market?.quoteDecimals ?? 6
 
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
       // Margin is held in quote-denom units: chainAmount = human * 10^quoteDecimals.
@@ -1016,21 +1006,13 @@ export function useInjective() {
         },
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadBalances()
       loadSubaccountBalances()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -1119,12 +1101,7 @@ export function useInjective() {
 
     submitting.value = true
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const raw = market.raw as any
       const tens = sdk.getDerivativeMarketTensMultiplier({
@@ -1160,21 +1137,14 @@ export function useInjective() {
         feeRecipient: address.value,
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadBalances()
       loadSubaccountBalances()
       loadPositions()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -1197,12 +1167,7 @@ export function useInjective() {
 
     submitting.value = true
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const raw = market.raw as any
       const tens = sdk.getDerivativeMarketTensMultiplier({
@@ -1244,20 +1209,13 @@ export function useInjective() {
         feeRecipient: address.value,
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadPositions()
       loadDerivativeOrders()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -1272,12 +1230,7 @@ export function useInjective() {
   ): Promise<{ txHash: string } | { error: string }> {
     if (!address.value) return { error: 'Wallet not connected' }
     try {
-      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
-        getEngine(),
-        import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/wallet-core'),
-      ])
-      const { network, endpoints } = await getNetwork()
+      const sdk = await import('@injectivelabs/sdk-ts')
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
       const msg = sdk.MsgCancelDerivativeOrder.fromJSON({
@@ -1287,19 +1240,12 @@ export function useInjective() {
         orderHash: order.orderHash,
       })
 
-      const broadcaster = new walletCore.MsgBroadcaster({
-        network,
-        endpoints,
-        walletStrategy,
-      })
-      const response = await broadcaster.broadcast({
-        msgs: msg,
-        injectiveAddress: address.value,
-      })
+      const result = await broadcastMsg(msg)
+      if ('error' in result) return result
 
       loadDerivativeOrders()
 
-      return { txHash: response.txHash }
+      return { txHash: result.txHash }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Transaction failed'
       return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
@@ -1321,6 +1267,8 @@ export function useInjective() {
     // lifecycle
     init,
     getApi,
+    // shared broadcast (also used by useIbc for MsgTransfer)
+    broadcastMsg,
     // wallet
     address,
     walletName,

@@ -4,13 +4,16 @@ const route = useRoute()
 </script>
 
 <template>
-  <div class="min-h-dvh flex flex-col bg-surface text-[var(--ui-text)]">
+  <!-- h-dvh (not min-h-dvh) + overflow-hidden: the terminal locks to a single
+       no-scroll screen — panels clip their own content. Portfolio opts into
+       scrolling via its own `overflow-y-auto` main. -->
+  <div class="h-dvh flex flex-col bg-surface text-[var(--ui-text)] overflow-hidden">
     <header class="flex-none flex items-center justify-between gap-4 px-4 lg:px-5 py-3 border-b border-border-soft">
       <div class="flex items-center gap-3">
         <NuxtLink to="/" class="w-9 h-9 grid place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-dim text-surface font-extrabold text-base hover:opacity-90 transition-opacity">
           ▚
         </NuxtLink>
-        <!-- Terminal / Portfolio nav -->
+        <!-- Terminal / Portfolio / Bridge nav -->
         <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
           <NuxtLink
             to="/"
@@ -25,6 +28,13 @@ const route = useRoute()
             :class="route.path === '/portfolio' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
           >
             Portfolio
+          </NuxtLink>
+          <NuxtLink
+            to="/bridge"
+            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="route.path === '/bridge' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+          >
+            Bridge
           </NuxtLink>
         </div>
         <div class="hidden sm:block">
