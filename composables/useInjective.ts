@@ -118,11 +118,17 @@ async function createEngine(): Promise<Engine> {
     import('@protobuf-ts/grpcweb-transport'),
   ])
 
-  const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
+  const isTestnet = useRuntimeConfig().public.network === 'testnet'
+  const network = isTestnet ? networks.Network.Testnet : networks.Network.Mainnet
+  const endpoints = networks.getNetworkEndpoints(network)
+  // Chart endpoint fallback differs per network; the k8s chart service is
+  // mainnet-only, so on testnet we prefer the indexer's chart endpoint.
   const chartEndpoint =
     endpoints.chart && endpoints.chart !== endpoints.indexer
       ? endpoints.chart
-      : 'https://k8s.mainnet.chart.grpc-web.injective.network'
+      : isTestnet
+        ? endpoints.indexer
+        : 'https://k8s.mainnet.chart.grpc-web.injective.network'
   const { Wallet } = walletBase
   const { ChainId } = tsTypes
 
@@ -169,6 +175,20 @@ function getEngine(): Promise<Engine> {
 }
 
 export function useInjective() {
+  // Network selection ('mainnet' | 'testnet') from runtime config. Resolved
+  // once per composable scope; broadcast functions read this via getNetwork().
+  const isTestnet = useRuntimeConfig().public.network === 'testnet'
+
+  // Resolve the sdk Network enum + chain id lazily (avoid importing the whole
+  // networks package on SSR where the composable is created but never trades).
+  async function getNetwork() {
+    const networks = await import('@injectivelabs/networks')
+    const network = isTestnet ? networks.Network.Testnet : networks.Network.Mainnet
+    const endpoints = networks.getNetworkEndpoints(network)
+    return { network, endpoints }
+  }
+  const chainId = isTestnet ? 'injective-888' : 'injective-1'
+
   const address = useState<string>('inj-address', () => '')
   const walletName = useState<string>('inj-wallet', () => '')
   const connecting = useState<boolean>('inj-connecting', () => false)
@@ -243,7 +263,10 @@ export function useInjective() {
 
   // Read-only demo address (from runtime config / env) so balances render with
   // real on-chain data even when no wallet is connected.
-  const demoAddress = useRuntimeConfig().public.demoAddress as string
+  // Demo address is mainnet-specific; on testnet we just show empty balances
+  // in demo mode (you'll connect a wallet with faucet funds to trade).
+  const configDemoAddress = useRuntimeConfig().public.demoAddress as string
+  const demoAddress = isTestnet ? '' : configDemoAddress
 
   const isConnected = computed(() => !!address.value)
   // Whose balances we display: the connected wallet, or the demo address.
@@ -345,8 +368,8 @@ export function useInjective() {
 
     try {
       await keplr.experimentalSuggestChain({
-        chainId: 'injective-1',
-        chainName: 'Injective',
+        chainId,
+        chainName: isTestnet ? 'Injective Testnet' : 'Injective',
         rpc: rpcUrl,
         rest: restUrl,
         bip44: { coinType: 60 },
@@ -691,12 +714,12 @@ export function useInjective() {
 
     submitting.value = true
     try {
-      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
         getEngine(),
         import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/networks'),
         import('@injectivelabs/wallet-core'),
       ])
+      const { network, endpoints } = await getNetwork()
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
 
@@ -710,10 +733,8 @@ export function useInjective() {
         feeRecipient: address.value,
       })
 
-      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
-
       const broadcaster = new walletCore.MsgBroadcaster({
-        network: networks.Network.Mainnet,
+        network,
         endpoints,
         walletStrategy,
       })
@@ -753,12 +774,12 @@ export function useInjective() {
 
     submitting.value = true
     try {
-      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
         getEngine(),
         import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/networks'),
         import('@injectivelabs/wallet-core'),
       ])
+      const { network, endpoints } = await getNetwork()
 
       const raw = market.raw as any
       const tens = sdk.getDerivativeMarketTensMultiplier({
@@ -801,9 +822,8 @@ export function useInjective() {
         feeRecipient: address.value,
       })
 
-      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
       const broadcaster = new walletCore.MsgBroadcaster({
-        network: networks.Network.Mainnet,
+        network,
         endpoints,
         walletStrategy,
       })
@@ -859,12 +879,12 @@ export function useInjective() {
     cancellingIds.value.add(order.orderHash)
 
     try {
-      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
         getEngine(),
         import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/networks'),
         import('@injectivelabs/wallet-core'),
       ])
+      const { network, endpoints } = await getNetwork()
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
 
@@ -875,10 +895,8 @@ export function useInjective() {
         orderHash: order.orderHash,
       })
 
-      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
-
       const broadcaster = new walletCore.MsgBroadcaster({
-        network: networks.Network.Mainnet,
+        network,
         endpoints,
         walletStrategy,
       })
@@ -943,12 +961,12 @@ export function useInjective() {
     const quoteDecimals = market?.quoteDecimals ?? 6
 
     try {
-      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
         getEngine(),
         import('@injectivelabs/sdk-ts'),
-        import('@injectivelabs/networks'),
         import('@injectivelabs/wallet-core'),
       ])
+      const { network, endpoints } = await getNetwork()
 
       const subaccountId = sdk.getDefaultSubaccountId(address.value)
       // Margin is held in quote-denom units: chainAmount = human * 10^quoteDecimals.
@@ -963,9 +981,8 @@ export function useInjective() {
         },
       })
 
-      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
       const broadcaster = new walletCore.MsgBroadcaster({
-        network: networks.Network.Mainnet,
+        network,
         endpoints,
         walletStrategy,
       })
@@ -999,6 +1016,8 @@ export function useInjective() {
     demoAddress,
     connect,
     disconnect,
+    isTestnet,
+    chainId,
     // balances
     balances,
     balancesLoading,

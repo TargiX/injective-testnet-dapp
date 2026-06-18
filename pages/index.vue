@@ -12,6 +12,7 @@ const {
   switchMode,
   latencyMs,
   lastPollAt,
+  isTestnet,
 } = useInjective()
 
 const toast = useToast()
@@ -114,9 +115,12 @@ watch(selectedMarketId, () => {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <UBadge variant="subtle" color="success" size="sm">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-bid mr-1.5 shadow-glow-bid" />
-          injective-1 · mainnet
+        <UBadge variant="subtle" :color="isTestnet ? 'warning' : 'success'" size="sm">
+          <span
+            class="inline-block w-1.5 h-1.5 rounded-full mr-1.5"
+            :class="isTestnet ? 'bg-yellow-400' : 'bg-bid shadow-glow-bid'"
+          />
+          {{ isTestnet ? 'injective-888 · testnet' : 'injective-1 · mainnet' }}
         </UBadge>
         <ConnectionIndicator class="hidden sm:flex" />
         <WalletConnect />
@@ -175,9 +179,9 @@ watch(selectedMarketId, () => {
       </main>
 
       <footer class="flex-none flex items-center justify-between px-5 py-1.5 border-t border-border-soft text-[11px]">
-        <div class="flex items-center gap-1">
-          <span class="text-[var(--ui-text-dimmed)]">injective-1 · mainnet</span>
-        </div>
+      <div class="flex items-center gap-1">
+        <span class="text-[var(--ui-text-dimmed)]">{{ isTestnet ? 'injective-888 · testnet' : 'injective-1 · mainnet' }}</span>
+      </div>
         <ConnectionIndicator />
       </footer>
     </template>
