@@ -9,6 +9,7 @@
  * Reuses useInjective()'s already-loaded markets/balances/positions — does not
  * re-fetch them. Only trade history is fetched here (paginated, capped at 500).
  */
+import { useInjective } from '~/composables/useInjective'
 
 export interface TradeRow {
   tradeId: string
