@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { fmtPrice, fmt, toHumanPrice, toHumanQuantity } from '~/utils/inj-format'
+import { fmtPrice, fmt } from '~/utils/inj-format'
 
 const {
   address,
@@ -12,6 +12,7 @@ const {
   cancelSpotOrder,
   selectedMarketId,
   markets,
+  mode,
 } = useInjective()
 
 const toast = useToast()
@@ -39,11 +40,20 @@ interface Row {
 const rows = computed<Row[]>(() => {
   return visible.value.map(o => {
     const market = markets.value.find(m => m.marketId === o.marketId)
-    const bd = market?.baseToken?.decimals ?? 18
-    const qd = market?.quoteToken?.decimals ?? 6
+    const bd = market?.baseDecimals ?? 18
+    const qd = market?.quoteDecimals ?? 6
+    const kind = market?.kind ?? 'spot'
     const ticker = market?.ticker ?? o.marketId.slice(0, 10) + '…'
-    const qty = toHumanQuantity(o.quantity, bd)
-    const unfilled = toHumanQuantity(o.unfilledQuantity, bd)
+    // Spot: price = chain * 10^(bd-qd), qty = chain / 10^bd
+    // Perp:  price = chain / 10^qd,        qty = chain
+    const toPrice = kind === 'spot'
+      ? (p: string) => Number(p) * 10 ** (bd - qd)
+      : (p: string) => Number(p) / 10 ** qd
+    const toQty = kind === 'spot'
+      ? (q: string) => Number(q) / 10 ** bd
+      : (q: string) => Number(q)
+    const qty = toQty(o.quantity)
+    const unfilled = toQty(o.unfilledQuantity)
     const filled = qty - unfilled
     return {
       orderHash: o.orderHash,
@@ -51,7 +61,7 @@ const rows = computed<Row[]>(() => {
       marketId: o.marketId,
       ticker,
       side: o.orderSide,
-      price: toHumanPrice(o.price, bd, qd),
+      price: toPrice(o.price),
       filled,
       total: qty,
       unfilled,
@@ -125,8 +135,9 @@ onBeforeUnmount(() => {
       Loading…
     </div>
 
-    <div v-else-if="!rows.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)] py-6">
-      No open orders
+    <div v-else-if="!rows.length" class="flex-1 flex flex-col items-center justify-center text-sm text-[var(--ui-text-muted)] py-6 gap-1">
+      <span>No open orders</span>
+      <span v-if="mode === 'perp'" class="text-[10px] text-[var(--ui-text-dimmed)]">Perp positions & orders — coming soon</span>
     </div>
 
     <template v-else>

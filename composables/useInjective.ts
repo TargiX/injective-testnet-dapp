@@ -1,6 +1,40 @@
-import type { SpotMarket } from '@injectivelabs/sdk-ts'
+import type { DerivativeMarket, SpotMarket } from '@injectivelabs/sdk-ts'
 
 export type WalletId = 'keplr' | 'leap'
+
+export type MarketMode = 'spot' | 'perp'
+
+/**
+ * Normalized market descriptor consumed by UI components. Spot markets come
+ * straight from the spot indexer; perpetual markets are oracle-priced
+ * synthetics with no base token. Components read `baseDecimals`/`quoteDecimals`
+ * instead of poking `baseToken.decimals` directly so both kinds render through
+ * the same code paths.
+ *
+ * NOTE on quantity scaling: spot quantity divides by baseDecimals, but perp
+ * quantity has NO decimals (chain quantity == human quantity). Components that
+ * convert chain quantity must branch on `kind`; see OrderBook/TradeHistory.
+ */
+export interface MarketRef {
+  kind: MarketMode
+  marketId: string
+  ticker: string // 'INJ/USDT' (spot) | 'INJ/USDT PERP' (perp)
+  baseSymbol: string // 'INJ'
+  quoteSymbol: string // 'USDT'
+  quoteDenom: string
+  quoteDecimals: number
+  baseDecimals: number // spot: baseToken.decimals; perp: price decimals from tens multiplier
+  minPriceTickSize: number
+  minQuantityTickSize: number
+  // spot-only
+  baseDenom?: string
+  // perp-only
+  initialMarginRatio?: number
+  maintenanceMarginRatio?: number
+  oracleScaleFactor?: number
+  isPerpetual?: boolean
+  raw: SpotMarket | DerivativeMarket
+}
 
 export interface TokenInfo {
   denom: string
@@ -54,6 +88,8 @@ interface Engine {
   endpoints: Endpoints
   bankApi: any
   spotApi: any
+  derivApi: any
+  accountApi: any
   chartApi: any
   walletStrategy: any
   Wallet: any
@@ -93,6 +129,8 @@ async function createEngine(): Promise<Engine> {
   // Chain, exchange indexer, and chart history are separate gRPC-web services.
   const bankApi = new sdk.ChainGrpcBankApi(endpoints.grpc)
   const spotApi = new sdk.IndexerGrpcSpotApi(endpoints.indexer)
+  const derivApi = new sdk.IndexerGrpcDerivativesApi(endpoints.indexer)
+  const accountApi = new sdk.IndexerGrpcAccountApi(endpoints.indexer)
   const chartApi = new indexerProto.InjectiveChartRPCClient(
     new grpcWeb.GrpcWebFetchTransport({
       baseUrl: chartEndpoint,
@@ -118,6 +156,8 @@ async function createEngine(): Promise<Engine> {
     endpoints: { grpc: endpoints.grpc, indexer: endpoints.indexer, chart: chartEndpoint },
     bankApi,
     spotApi,
+    derivApi,
+    accountApi,
     chartApi,
     walletStrategy,
     Wallet,
@@ -137,7 +177,16 @@ export function useInjective() {
   const balances = useState<BalanceRow[]>('inj-balances', () => [])
   const balancesLoading = useState<boolean>('inj-balances-loading', () => false)
 
-  const markets = useState<SpotMarket[]>('inj-markets', () => [])
+  // Subaccount (margin) balances — required for derivatives trading. Spot draws
+  // directly from the bank balance; perp orders must have quote-denom margin
+  // deposited to the subaccount via MsgDeposit.
+  const subaccountBalances = useState<BalanceRow[]>('inj-sub-balances', () => [])
+
+  const spotMarkets = useState<MarketRef[]>('inj-spot-markets', () => [])
+  const derivMarkets = useState<MarketRef[]>('inj-deriv-markets', () => [])
+  const mode = useState<MarketMode>('inj-mode', () => 'spot')
+  // `markets` reflects the active mode — SpotMarkets.vue / selectMarket read it.
+  const markets = computed(() => (mode.value === 'spot' ? spotMarkets.value : derivMarkets.value))
   const marketsLoading = useState<boolean>('inj-markets-loading', () => false)
   const marketsError = useState<string>('inj-markets-error', () => '')
 
@@ -205,29 +254,80 @@ export function useInjective() {
     markets.value.find((m) => m.marketId === selectedMarketId.value),
   )
 
-  function registerMarketTokens(list: SpotMarket[]) {
+  function registerMarketTokens(list: MarketRef[]) {
     const reg = { ...tokenRegistry.value }
     for (const m of list) {
-      if (m.baseToken && m.baseDenom) {
+      // Spot base token
+      if (m.kind === 'spot' && m.baseDenom) {
+        const raw = m.raw as SpotMarket
         reg[m.baseDenom] = {
           denom: m.baseDenom,
-          symbol: m.baseToken.symbol,
-          decimals: m.baseToken.decimals,
-          logo: (m.baseToken as any).logo,
-          name: (m.baseToken as any).name,
+          symbol: m.baseSymbol,
+          decimals: m.baseDecimals,
+          logo: (raw.baseToken as any)?.logo,
+          name: (raw.baseToken as any)?.name,
         }
       }
-      if (m.quoteToken && m.quoteDenom) {
+      // Quote token (both spot + perp settle in a quote denom)
+      if (m.quoteDenom) {
+        const raw = m.raw as SpotMarket | DerivativeMarket
+        const qt = (raw as any).quoteToken
         reg[m.quoteDenom] = {
           denom: m.quoteDenom,
-          symbol: m.quoteToken.symbol,
-          decimals: m.quoteToken.decimals,
-          logo: (m.quoteToken as any).logo,
-          name: (m.quoteToken as any).name,
+          symbol: m.quoteSymbol,
+          decimals: m.quoteDecimals,
+          logo: qt?.logo,
+          name: qt?.name,
         }
       }
     }
     tokenRegistry.value = reg
+  }
+
+  /** Normalize a SpotMarket into the unified MarketRef. */
+  function toSpotRef(m: SpotMarket): MarketRef {
+    return {
+      kind: 'spot',
+      marketId: m.marketId,
+      ticker: m.ticker,
+      baseSymbol: m.baseToken?.symbol ?? '',
+      quoteSymbol: m.quoteToken?.symbol ?? '',
+      baseDenom: m.baseDenom,
+      quoteDenom: m.quoteDenom,
+      baseDecimals: m.baseToken?.decimals ?? 18,
+      quoteDecimals: m.quoteToken?.decimals ?? 6,
+      minPriceTickSize: m.minPriceTickSize,
+      minQuantityTickSize: m.minQuantityTickSize,
+      raw: m,
+    }
+  }
+
+  /** Normalize a PerpetualMarket into the unified MarketRef. */
+  function toPerpRef(m: DerivativeMarket): MarketRef {
+    const p = m as any // PerpetualMarket fields
+    // Base/quote symbols come from the oracle pair (e.g. 'INJ' / 'USDT').
+    const baseSymbol = p.oracleBase ?? ''
+    const quoteSymbol = p.oracleQuote ?? ''
+    const ticker = p.ticker ?? `${baseSymbol}/${quoteSymbol} PERP`
+    return {
+      kind: 'perp',
+      marketId: p.marketId,
+      ticker,
+      baseSymbol,
+      quoteSymbol,
+      quoteDenom: p.quoteDenom,
+      quoteDecimals: p.quoteToken?.decimals ?? 6,
+      // Perp prices/margins scale by quoteDecimals; quantity has no decimals.
+      // baseDecimals is used only for price-tick math, so derive it from quote.
+      baseDecimals: p.quoteToken?.decimals ?? 6,
+      minPriceTickSize: p.minPriceTickSize,
+      minQuantityTickSize: p.minQuantityTickSize,
+      initialMarginRatio: Number(p.initialMarginRatio),
+      maintenanceMarginRatio: Number(p.maintenanceMarginRatio),
+      oracleScaleFactor: p.oracleScaleFactor,
+      isPerpetual: p.isPerpetual,
+      raw: m,
+    }
   }
 
   async function init() {
@@ -330,26 +430,39 @@ export function useInjective() {
     }
   }
 
-  // ---- spot markets (indexer, gRPC-web) ----
+  // ---- spot + perp markets (indexer, gRPC-web) ----
   async function loadMarkets() {
     marketsLoading.value = true
     marketsError.value = ''
     try {
-      const { spotApi } = await getEngine()
-      const res: SpotMarket[] = await spotApi.fetchMarkets()
-      const active = res
+      const { spotApi, derivApi } = await getEngine()
+      const [spotRes, derivRes] = await Promise.all([
+        spotApi.fetchMarkets(),
+        derivApi.fetchMarkets().catch(() => []), // perp load must not block spot
+      ])
+
+      const spot: MarketRef[] = (spotRes as SpotMarket[])
         .filter((m) => m.baseToken && m.quoteToken)
+        .map(toSpotRef)
         .sort((a, b) => a.ticker.localeCompare(b.ticker))
-      markets.value = active
-      registerMarketTokens(active)
+      spotMarkets.value = spot
+
+      const perp: MarketRef[] = (derivRes as DerivativeMarket[])
+        .filter((m: any) => m.isPerpetual && m.quoteToken) // perp only, drop expiry/binary
+        .map(toPerpRef)
+        .sort((a, b) => a.ticker.localeCompare(b.ticker))
+      derivMarkets.value = perp
+
+      registerMarketTokens([...spot, ...perp])
+
       if (!selectedMarketId.value) {
         // Start on the flagship Injective spot market and fall back only if it
         // is unavailable on the current endpoint.
         const prefer = ['INJ/USDT', 'INJ/USDC', 'TIA/USDT']
         const pick =
           prefer
-            .map((t) => active.find((m) => m.ticker === t))
-            .find(Boolean) ?? active[0]
+            .map((t) => spot.find((m) => m.ticker === t))
+            .find(Boolean) ?? spot[0]
         selectedMarketId.value = pick?.marketId ?? ''
       }
     } catch (e: any) {
@@ -372,14 +485,31 @@ export function useInjective() {
     selectedMarketId.value = marketId
   }
 
+  /** Switch spot ↔ perp and select a sensible default market in the new mode. */
+  function switchMode(next: MarketMode) {
+    if (next === mode.value) return
+    mode.value = next
+    const list = next === 'spot' ? spotMarkets.value : derivMarkets.value
+    const prefer = next === 'spot'
+      ? ['INJ/USDT', 'INJ/USDC', 'TIA/USDT']
+      : ['INJ/USDT PERP', 'INJ-USDT PERP', 'TIA/USDT PERP', 'INJ/USDC PERP']
+    const pick =
+      prefer
+        .map((t) => list.find((m) => m.ticker.toUpperCase() === t.toUpperCase()))
+        .find(Boolean) ?? list[0]
+    selectMarket(pick?.marketId ?? '')
+  }
+
   // ---- order book (indexer, gRPC-web) ----
   async function loadOrderbook() {
+    const market = selectedMarket.value
     const marketId = selectedMarketId.value
-    if (!marketId) return
+    if (!marketId || !market) return
     orderbookLoading.value = true
     try {
-      const { spotApi } = await getEngine()
-      const ob = await spotApi.fetchOrderbookV2(marketId)
+      const { spotApi, derivApi } = await getEngine()
+      const api = market.kind === 'spot' ? spotApi : derivApi
+      const ob = await api.fetchOrderbookV2(marketId)
       orderbookBuys.value = ob.buys ?? []
       orderbookSells.value = ob.sells ?? []
       orderbookUpdatedAt.value = Date.now()
@@ -395,21 +525,29 @@ export function useInjective() {
 
   async function loadTrades() {
     const market = selectedMarket.value
-    if (!market || !market.baseToken || !market.quoteToken) return
+    if (!market?.marketId) return
     tradesLoading.value = true
     try {
-      const { spotApi } = await getEngine()
-      const res = await spotApi.fetchTrades({ marketId: market.marketId })
+      const { spotApi, derivApi } = await getEngine()
+      const api = market.kind === 'spot' ? spotApi : derivApi
+      const res = await api.fetchTrades({ marketId: market.marketId })
       const list: any[] = res.trades ?? res ?? []
-      const bd = market.baseToken.decimals
-      const qd = market.quoteToken.decimals
+      const qd = market.quoteDecimals
 
       recentTrades.value = list
+
+      // Spot chain price: human = chainPrice * 10^(baseDecimals - quoteDecimals)
+      // Perp chain price: human = chainPrice / 10^quoteDecimals  (price is in
+      // quote units, scaled only by quoteDecimals — no base token).
+      const toHumanPrice =
+        market.kind === 'spot'
+          ? (p: string) => Number(p) * 10 ** (market.baseDecimals - qd)
+          : (p: string) => Number(p) / 10 ** qd
 
       const points = list
         .map((t) => ({
           t: Number(t.executedAt),
-          p: Number(t.price) * 10 ** (bd - qd),
+          p: toHumanPrice(t.price),
         }))
         .filter((pt) => pt.t > 0 && isFinite(pt.p) && pt.p > 0)
         .sort((a, b) => a.t - b.t)
@@ -438,7 +576,10 @@ export function useInjective() {
     try {
       const { chartApi } = await getEngine()
       const to = Math.floor(Date.now() / 1000)
-      const res = await chartApi.spotMarketHistory({
+      const historyFn = market.kind === 'spot'
+        ? chartApi.spotMarketHistory
+        : chartApi.derivativeMarketHistory
+      const res = await historyFn({
         symbol: '',
         marketId: market.marketId,
         resolution,
@@ -492,7 +633,10 @@ export function useInjective() {
     try {
       const { chartApi } = await getEngine()
       const to = Math.floor(Date.now() / 1000)
-      const res = await chartApi.spotMarketHistory({
+      const historyFn = market.kind === 'spot'
+        ? chartApi.spotMarketHistory
+        : chartApi.derivativeMarketHistory
+      const res = await historyFn({
         symbol: '',
         marketId: market.marketId,
         resolution: '60',
@@ -591,6 +735,97 @@ export function useInjective() {
     }
   }
 
+  // ---- derivatives: order submission (chain, gRPC-web) ----
+  async function submitDerivativeOrder(
+    orderSide: 'buy' | 'sell',
+    humanPrice: number,
+    humanQuantity: number,
+    leverage: number,
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    const market = selectedMarket.value
+    if (!market?.marketId || market.kind !== 'perp') return { error: 'No perp market selected' }
+    if (!(humanPrice > 0) || !(humanQuantity > 0)) return { error: 'Invalid price or quantity' }
+
+    const imr = market.initialMarginRatio
+    const maxLeverage = imr ? Math.floor(1 / imr) : 1
+    const lev = Math.max(1, Math.min(leverage, maxLeverage))
+
+    submitting.value = true
+    try {
+      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/networks'),
+        import('@injectivelabs/wallet-core'),
+      ])
+
+      const raw = market.raw as any
+      const tens = sdk.getDerivativeMarketTensMultiplier({
+        quoteDecimals: market.quoteDecimals,
+        minPriceTickSize: raw.minPriceTickSize,
+        minQuantityTickSize: raw.minQuantityTickSize,
+      })
+
+      // Initial margin = notional / leverage, in human quote units.
+      const notional = humanPrice * humanQuantity
+      const humanMargin = notional / lev
+
+      // Scale human → chain using the SDK's fixed-precision helpers.
+      const chainPrice = sdk.derivativePriceToChainPriceToFixed({
+        value: humanPrice,
+        tensMultiplier: tens.priceTensMultiplier,
+        quoteDecimals: market.quoteDecimals,
+      })
+      const chainMargin = sdk.derivativeMarginToChainMarginToFixed({
+        value: humanMargin,
+        tensMultiplier: tens.priceTensMultiplier,
+        quoteDecimals: market.quoteDecimals,
+      })
+      const chainQuantity = sdk.derivativeQuantityToChainQuantityToFixed({
+        value: humanQuantity,
+        tensMultiplier: tens.quantityTensMultiplier,
+      })
+
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+
+      const msg = sdk.MsgCreateDerivativeLimitOrder.fromJSON({
+        marketId: market.marketId,
+        subaccountId,
+        injectiveAddress: address.value,
+        // OrderType enum (numeric) — same namespace as spot; ts types are loose here.
+        orderType: (orderSide === 'buy' ? sdk.OrderType.BUY : sdk.OrderType.SELL) as any,
+        price: chainPrice,
+        margin: chainMargin,
+        quantity: chainQuantity,
+        feeRecipient: address.value,
+      })
+
+      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network: networks.Network.Mainnet,
+        endpoints,
+        walletStrategy,
+      })
+
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadBalances()
+      loadSubaccountBalances()
+      loadOrderbook()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    } finally {
+      submitting.value = false
+    }
+  }
+
   // ---- open orders (indexer) ----
   const openOrders = useState<any[]>('inj-open-orders', () => [])
   const ordersLoading = ref(false)
@@ -665,6 +900,91 @@ export function useInjective() {
     }
   }
 
+  // ---- derivatives: subaccount margin balances (indexer) ----
+  async function loadSubaccountBalances() {
+    if (!address.value) {
+      subaccountBalances.value = []
+      return
+    }
+    try {
+      const { accountApi } = await getEngine()
+      const sdk = await import('@injectivelabs/sdk-ts')
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+      const res = await accountApi.fetchSubaccountBalancesList(subaccountId)
+      const reg = tokenRegistry.value
+      subaccountBalances.value = (res ?? [])
+        .filter((b: any) => b?.deposit?.availableBalance && Number(b.deposit.availableBalance) > 0)
+        .map((b: any) => {
+          const denom: string = b.denom
+          const token = reg[denom]
+          return {
+            denom,
+            symbol: token?.symbol ?? denom,
+            amount: b.deposit.availableBalance,
+            decimals: token?.decimals ?? 0,
+            logo: token?.logo,
+            name: token?.name,
+          }
+        })
+    } catch {
+      // subaccount balances are best-effort; the deposit UI falls back to bank balance
+    }
+  }
+
+  // ---- derivatives: deposit margin to subaccount (chain, gRPC-web) ----
+  async function depositMargin(
+    denom: string,
+    humanAmount: number,
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    if (!(humanAmount > 0)) return { error: 'Enter an amount' }
+
+    const market = selectedMarket.value
+    const quoteDecimals = market?.quoteDecimals ?? 6
+
+    try {
+      const [{ walletStrategy }, sdk, networks, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/networks'),
+        import('@injectivelabs/wallet-core'),
+      ])
+
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+      // Margin is held in quote-denom units: chainAmount = human * 10^quoteDecimals.
+      const chainAmount = (humanAmount * 10 ** quoteDecimals).toFixed(0)
+
+      const msg = sdk.MsgDeposit.fromJSON({
+        subaccountId,
+        injectiveAddress: address.value,
+        amount: {
+          amount: chainAmount,
+          denom,
+        },
+      })
+
+      const endpoints = networks.getNetworkEndpoints(networks.Network.Mainnet)
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network: networks.Network.Mainnet,
+        endpoints,
+        walletStrategy,
+      })
+
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadBalances()
+      loadSubaccountBalances()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    }
+  }
+
   return {
     // lifecycle
     init,
@@ -683,8 +1003,14 @@ export function useInjective() {
     balances,
     balancesLoading,
     loadBalances,
+    subaccountBalances,
+    loadSubaccountBalances,
     // markets
     markets,
+    spotMarkets,
+    derivMarkets,
+    mode,
+    switchMode,
     marketsLoading,
     marketsError,
     loadMarkets,
@@ -717,6 +1043,8 @@ export function useInjective() {
     // order submission
     submitting,
     submitSpotOrder,
+    submitDerivativeOrder,
+    depositMargin,
     // open orders
     openOrders,
     ordersLoading,

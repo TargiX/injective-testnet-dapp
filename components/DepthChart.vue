@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { toHumanPrice, toHumanQuantity, fmtPrice, fmt } from '~/utils/inj-format'
+import { fmtPrice, fmt } from '~/utils/inj-format'
 
 const { orderbookBuys, orderbookSells, selectedMarket } = useInjective()
 
@@ -10,14 +10,21 @@ const LEVELS = 40
 
 const chart = computed(() => {
   const m = selectedMarket.value
-  if (!m?.baseToken || !m?.quoteToken) return null
-  const bd = m.baseToken.decimals
-  const qd = m.quoteToken.decimals
+  if (!m?.marketId) return null
+  const bd = m.baseDecimals
+  const qd = m.quoteDecimals
+  const kind = m.kind
 
   const prep = (raw: { price: string; quantity: string }[], dir: 'asc' | 'desc') => {
+    const toPrice = kind === 'spot'
+      ? (p: string) => Number(p) * 10 ** (bd - qd)
+      : (p: string) => Number(p) / 10 ** qd
+    const toSize = kind === 'spot'
+      ? (q: string) => Number(q) / 10 ** bd
+      : (q: string) => Number(q)
     const mapped = raw.map((l) => ({
-      price: toHumanPrice(l.price, bd, qd),
-      size: toHumanQuantity(l.quantity, bd),
+      price: toPrice(l.price),
+      size: toSize(l.quantity),
     }))
     mapped.sort((a, b) => (dir === 'asc' ? a.price - b.price : b.price - a.price))
     return mapped

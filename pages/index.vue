@@ -3,10 +3,13 @@ const {
   init,
   loadMarkets,
   loadBalances,
+  loadSubaccountBalances,
   loadOrderbook,
   loadTrades,
   loadMarketStats,
   selectedMarketId,
+  mode,
+  switchMode,
   latencyMs,
   lastPollAt,
 } = useInjective()
@@ -51,10 +54,12 @@ onMounted(async () => {
     await loadMarkets()
     await Promise.all([loadOrderbook(), loadTrades()])
     loadBalances()
+    loadSubaccountBalances()
     loadMarketStats()
     pollTimer = setInterval(() => {
       pollCycle()
       loadBalances()
+      loadSubaccountBalances()
       loadMarketStats()
     }, 3000)
   } catch (e: any) {
@@ -68,6 +73,7 @@ onBeforeUnmount(() => {
 
 watch(selectedMarketId, () => {
   Promise.all([loadOrderbook(), loadTrades()])
+  loadSubaccountBalances()
   loadMarketStats()
 })
 </script>
@@ -78,6 +84,26 @@ watch(selectedMarketId, () => {
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 grid place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-dim text-surface font-extrabold text-base">
           ▚
+        </div>
+        <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
+          <button
+            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="mode === 'spot'
+              ? 'bg-surface-3 text-[var(--ui-text)]'
+              : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+            @click="switchMode('spot')"
+          >
+            Spot
+          </button>
+          <button
+            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="mode === 'perp'
+              ? 'bg-accent/20 text-accent'
+              : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+            @click="switchMode('perp')"
+          >
+            Perp
+          </button>
         </div>
         <div>
           <h1 class="text-sm font-bold tracking-tight leading-tight">Injective Trading</h1>

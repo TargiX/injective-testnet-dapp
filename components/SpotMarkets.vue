@@ -7,6 +7,8 @@ const {
   marketsError,
   selectedMarketId,
   selectMarket,
+  mode,
+  switchMode,
 } = useInjective()
 
 const query = ref('')
@@ -43,7 +45,26 @@ const filtered = computed(() => {
 <template>
   <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
     <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
-      <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Spot Markets</span>
+      <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
+        <button
+          class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+          :class="mode === 'spot'
+            ? 'bg-surface-3 text-[var(--ui-text)]'
+            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+          @click="switchMode('spot')"
+        >
+          Spot
+        </button>
+        <button
+          class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+          :class="mode === 'perp'
+            ? 'bg-surface-3 text-[var(--ui-text)]'
+            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+          @click="switchMode('perp')"
+        >
+          Perp
+        </button>
+      </div>
       <UBadge variant="subtle" size="sm">{{ markets.length }}</UBadge>
     </div>
 
@@ -84,14 +105,20 @@ const filtered = computed(() => {
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
         </button>
-        <TokenIcon :logo="(m.baseToken as any)?.logo" :symbol="m.baseToken?.symbol" :size="18" />
+        <TokenIcon :logo="(m.raw as any)?.baseToken?.logo" :symbol="m.baseSymbol" :size="18" />
         <span class="text-[13px] font-semibold whitespace-nowrap leading-tight">
-          <span class="text-[var(--ui-text-highlighted)]">{{ m.baseToken?.symbol }}</span>
+          <span class="text-[var(--ui-text-highlighted)]">{{ m.baseSymbol }}</span>
           <span class="text-[var(--ui-text-dimmed)] mx-0.5 font-normal">/</span>
-          <span class="text-[var(--ui-text-muted)]">{{ m.quoteToken?.symbol }}</span>
+          <span class="text-[var(--ui-text-muted)]">{{ m.quoteSymbol }}</span>
+        </span>
+        <span
+          v-if="m.kind === 'perp'"
+          class="ml-1 px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-accent/15 text-accent"
+        >
+          Perp
         </span>
         <span class="ml-auto text-[10px] text-[var(--ui-text-dimmed)] max-w-[70px] truncate text-right">
-          {{ cleanName((m.baseToken as any)?.name) }}
+          {{ cleanName((m.raw as any)?.baseToken?.name) }}
         </span>
       </li>
       <li v-if="!filtered.length" class="p-4 text-sm text-[var(--ui-text-muted)] text-center cursor-default">

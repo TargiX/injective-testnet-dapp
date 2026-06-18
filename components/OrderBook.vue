@@ -1,10 +1,5 @@
 <script setup lang="ts">
-import {
-  toHumanPrice,
-  toHumanQuantity,
-  fmtPrice,
-  fmt,
-} from '~/utils/inj-format'
+import { fmtPrice, fmt } from '~/utils/inj-format'
 
 const {
   selectedMarket,
@@ -28,12 +23,22 @@ interface Row {
 function build(
   levels: { price: string; quantity: string }[],
   dir: 'asc' | 'desc',
+  kind: 'spot' | 'perp',
   baseDecimals: number,
   quoteDecimals: number,
 ): { rows: Row[]; maxCum: number } {
+  // Spot: price = chain * 10^(bd-qd), size = chain / 10^bd
+  // Perp:  price = chain / 10^qd,        size = chain (no decimals)
+  const toPrice = kind === 'spot'
+    ? (p: string) => Number(p) * 10 ** (baseDecimals - quoteDecimals)
+    : (p: string) => Number(p) / 10 ** quoteDecimals
+  const toSize = kind === 'spot'
+    ? (q: string) => Number(q) / 10 ** baseDecimals
+    : (q: string) => Number(q)
+
   const mapped = levels.map((l) => ({
-    price: toHumanPrice(l.price, baseDecimals, quoteDecimals),
-    size: toHumanQuantity(l.quantity, baseDecimals),
+    price: toPrice(l.price),
+    size: toSize(l.quantity),
   }))
   mapped.sort((a, b) => (dir === 'asc' ? a.price - b.price : b.price - a.price))
   const top = mapped.slice(0, LEVELS)
@@ -47,14 +52,11 @@ function build(
 
 const book = computed(() => {
   const m = selectedMarket.value
-  if (!m || !m.baseToken || !m.quoteToken) {
+  if (!m?.marketId) {
     return { asks: [] as Row[], bids: [] as Row[] }
   }
-  const bd = m.baseToken.decimals
-  const qd = m.quoteToken.decimals
-
-  const { rows: bids, maxCum: bidMax } = build(orderbookBuys.value, 'desc', bd, qd)
-  const { rows: asksAsc, maxCum: askMax } = build(orderbookSells.value, 'asc', bd, qd)
+  const { rows: bids, maxCum: bidMax } = build(orderbookBuys.value, 'desc', m.kind, m.baseDecimals, m.quoteDecimals)
+  const { rows: asksAsc, maxCum: askMax } = build(orderbookSells.value, 'asc', m.kind, m.baseDecimals, m.quoteDecimals)
 
   const max = Math.max(bidMax, askMax, 1)
   for (const r of bids) r.depth = r.cum / max

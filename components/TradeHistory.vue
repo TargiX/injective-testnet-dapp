@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { fmtPrice, fmt, toHumanPrice, toHumanQuantity } from '~/utils/inj-format'
+import { fmtPrice, fmt } from '~/utils/inj-format'
 
 const { recentTrades, tradesLoading, selectedMarket } = useInjective()
 
-const baseSymbol = computed(() => selectedMarket.value?.baseToken?.symbol ?? '')
+const baseSymbol = computed(() => selectedMarket.value?.baseSymbol ?? '')
 
 interface TradeRow {
   price: number
@@ -15,18 +15,29 @@ interface TradeRow {
 
 const rows = computed<TradeRow[]>(() => {
   const m = selectedMarket.value
-  if (!m?.baseToken || !m?.quoteToken) return []
-  const bd = m.baseToken.decimals
-  const qd = m.quoteToken.decimals
+  if (!m?.marketId) return []
+  // Spot: price = chain * 10^(bd-qd), size = chain / 10^bd
+  // Perp:  price = chain / 10^qd,        size = chain (no decimals)
+  const toPrice = m.kind === 'spot'
+    ? (p: string) => Number(p) * 10 ** (m.baseDecimals - m.quoteDecimals)
+    : (p: string) => Number(p) / 10 ** m.quoteDecimals
+  const toSize = m.kind === 'spot'
+    ? (q: string) => Number(q) / 10 ** m.baseDecimals
+    : (q: string) => Number(q)
 
   return [...recentTrades.value]
-    .map((t) => ({
-      price: toHumanPrice(t.price, bd, qd),
-      size: toHumanQuantity(t.quantity, bd),
-      total: toHumanPrice(t.price, bd, qd) * toHumanQuantity(t.quantity, bd),
-      side: t.tradeDirection === 'sell' || t.orderType === 'sell' ? 'sell' : 'buy',
-      time: new Date(Number(t.executedAt)).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    }))
+    .map((t): TradeRow => {
+      const price = toPrice(t.price)
+      const size = toSize(t.quantity)
+      const side: 'buy' | 'sell' = t.tradeDirection === 'sell' || t.orderType === 'sell' ? 'sell' : 'buy'
+      return {
+        price,
+        size,
+        total: price * size,
+        side,
+        time: new Date(Number(t.executedAt)).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      }
+    })
     .sort((a, b) => b.total - a.total > 0 ? -1 : 1)
     .slice(0, 50)
     .reverse()
