@@ -1289,9 +1289,21 @@ export function useInjective() {
     }
   }
 
+  // Direct access to the indexer APIs for the portfolio composable (trade
+  // history across all markets). Returns null if the engine isn't ready yet.
+  async function getApi() {
+    try {
+      const { derivApi, spotApi } = await getEngine()
+      return { derivApi, spotApi }
+    } catch {
+      return null
+    }
+  }
+
   return {
     // lifecycle
     init,
+    getApi,
     // wallet
     address,
     walletName,
