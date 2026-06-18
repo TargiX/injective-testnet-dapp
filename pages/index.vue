@@ -4,6 +4,8 @@ const {
   loadMarkets,
   loadBalances,
   loadSubaccountBalances,
+  loadPositions,
+  loadDerivativeOrders,
   loadOrderbook,
   loadTrades,
   loadMarketStats,
@@ -17,6 +19,8 @@ const {
 
 const toast = useToast()
 const bottomTab = ref<'orderbook' | 'trades' | 'balances'>('orderbook')
+// Right-panel segmented control (perp mode shows Positions alongside Orders).
+const rightTab = ref<'orders' | 'positions'>('orders')
 // Mobile bottom-tab navigation. `lg` (1024px) is the desktop breakpoint —
 // below it we render a single-panel + bottom-nav layout instead of the
 // 3-column grid.
@@ -56,11 +60,17 @@ onMounted(async () => {
     await Promise.all([loadOrderbook(), loadTrades()])
     loadBalances()
     loadSubaccountBalances()
+    loadPositions()
+    loadDerivativeOrders()
     loadMarketStats()
     pollTimer = setInterval(() => {
       pollCycle()
       loadBalances()
       loadSubaccountBalances()
+      if (mode.value === 'perp') {
+        loadPositions()
+        loadDerivativeOrders()
+      }
       loadMarketStats()
     }, 3000)
   } catch (e: any) {
@@ -75,6 +85,10 @@ onBeforeUnmount(() => {
 watch(selectedMarketId, () => {
   Promise.all([loadOrderbook(), loadTrades()])
   loadSubaccountBalances()
+  if (mode.value === 'perp') {
+    loadPositions()
+    loadDerivativeOrders()
+  }
   loadMarketStats()
 })
 </script>
@@ -172,8 +186,28 @@ watch(selectedMarketId, () => {
         </div>
         <div class="flex flex-col gap-3 overflow-hidden">
           <TradeForm />
-          <div class="flex-1 overflow-hidden">
-            <OpenOrders />
+          <div class="flex-1 overflow-hidden flex flex-col">
+            <!-- Right-panel segmented control: Positions (perp) | Orders -->
+            <div v-if="mode === 'perp'" class="flex-none flex items-center gap-0.5 px-3 py-1.5 border-b border-border-soft">
+              <button
+                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                :class="rightTab === 'positions' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+                @click="rightTab = 'positions'"
+              >
+                Positions
+              </button>
+              <button
+                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                :class="rightTab === 'orders' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+                @click="rightTab = 'orders'"
+              >
+                Orders
+              </button>
+            </div>
+            <div class="flex-1 overflow-hidden">
+              <Positions v-if="mode === 'perp' && rightTab === 'positions'" />
+              <OpenOrders v-else />
+            </div>
           </div>
         </div>
       </main>
@@ -231,8 +265,28 @@ watch(selectedMarketId, () => {
           <TradeForm />
         </div>
 
-        <div v-show="mobileTab === 'orders'" class="h-full overflow-hidden">
-          <OpenOrders />
+        <div v-show="mobileTab === 'orders'" class="h-full overflow-hidden flex flex-col">
+          <!-- In perp mode, the Orders tab gets a Positions/Orders sub-toggle -->
+          <div v-if="mode === 'perp'" class="flex-none flex items-center gap-0.5 px-3 py-1.5 border-b border-border-soft">
+            <button
+              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              :class="rightTab === 'positions' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)]'"
+              @click="rightTab = 'positions'"
+            >
+              Positions
+            </button>
+            <button
+              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              :class="rightTab === 'orders' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)]'"
+              @click="rightTab = 'orders'"
+            >
+              Orders
+            </button>
+          </div>
+          <div class="flex-1 overflow-hidden">
+            <Positions v-if="mode === 'perp' && rightTab === 'positions'" />
+            <OpenOrders v-else />
+          </div>
         </div>
       </main>
 

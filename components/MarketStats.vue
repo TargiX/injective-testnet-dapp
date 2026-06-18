@@ -6,6 +6,16 @@ const { selectedMarket, marketStats } = useInjective()
 const baseSymbol = computed(() => selectedMarket.value?.baseSymbol ?? '')
 const quoteSymbol = computed(() => selectedMarket.value?.quoteSymbol ?? '')
 const ticker = computed(() => selectedMarket.value?.ticker ?? '')
+const isPerp = computed(() => selectedMarket.value?.kind === 'perp')
+
+// Funding rate: hourlyInterestRate is a decimal string (e.g. "0.000125").
+// Display as percent/hr. Positive = longs pay shorts.
+const fundingRatePct = computed<number | null>(() => {
+  if (!isPerp.value) return null
+  const rate = (selectedMarket.value?.raw as any)?.perpetualMarketInfo?.hourlyInterestRate
+  if (!rate) return null
+  return Number(rate) * 100
+})
 
 const isUp = computed(() => (marketStats.value?.changePct ?? 0) >= 0)
 </script>
@@ -29,6 +39,13 @@ const isUp = computed(() => (marketStats.value?.changePct ?? 0) >= 0)
         <span class="text-[var(--ui-text-dimmed)]">24h</span>
         <span class="font-mono tabular-nums font-semibold" :class="isUp ? 'text-bid' : 'text-ask'">
           {{ isUp ? '+' : '' }}{{ marketStats.changePct.toFixed(2) }}%
+        </span>
+      </div>
+
+      <div v-if="fundingRatePct !== null" class="flex items-center gap-1" title="Hourly funding rate — positive means longs pay shorts">
+        <span class="text-[var(--ui-text-dimmed)]">Fund</span>
+        <span class="font-mono tabular-nums" :class="fundingRatePct >= 0 ? 'text-ask' : 'text-bid'">
+          {{ fundingRatePct >= 0 ? '+' : '' }}{{ fundingRatePct.toFixed(4) }}%/h
         </span>
       </div>
 

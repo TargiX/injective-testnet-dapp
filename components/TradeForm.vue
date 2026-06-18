@@ -14,13 +14,15 @@ const {
   submitting,
   submitSpotOrder,
   submitDerivativeOrder,
+  submitDerivativeStopOrder,
   depositMargin,
 } = useInjective()
 
 const toast = useToast()
 
 type OrderSide = 'buy' | 'sell'
-type OrderType = 'limit' | 'market'
+type OrderType = 'limit' | 'market' | 'stop'
+type StopKind = 'stop' | 'take'
 interface PendingOrder {
   side: OrderSide
   price: number
@@ -30,6 +32,8 @@ interface PendingOrder {
   kind: 'spot' | 'perp'
   leverage?: number
   margin?: number
+  trigger?: number
+  stopKind?: StopKind
 }
 
 const side = ref<OrderSide>('buy')
@@ -37,6 +41,15 @@ const orderType = ref<OrderType>('limit')
 const priceInput = ref('')
 const amountInput = ref('')
 const leverage = ref(1)
+const triggerInput = ref('')
+const stopKind = ref<StopKind>('stop')
+
+const triggerPrice = computed(() => parseFloat(triggerInput.value) || 0)
+
+// Order types available: limit/market always; 'stop' only for perps.
+const orderTypes = computed<OrderType[]>(() =>
+  isPerp.value ? ['limit', 'market', 'stop'] : ['limit', 'market'],
+)
 
 const confirmOpen = ref(false)
 const confirming = ref(false)
@@ -183,6 +196,24 @@ watch(maxLeverage, (max) => {
 
 // Stage 1: build a pending order and open the confirm modal (no signing yet).
 function submitOrder() {
+  if (orderType.value === 'stop') {
+    // Stop/TP: needs trigger + amount, not regular price.
+    if (!triggerPrice.value || !amount.value) return
+    const kind = 'perp'
+    pendingOrder.value = {
+      side: side.value,
+      price: triggerPrice.value,
+      amount: amount.value,
+      total: triggerPrice.value * amount.value,
+      orderType: 'stop',
+      kind,
+      trigger: triggerPrice.value,
+      stopKind: stopKind.value,
+      margin: 0,
+    }
+    confirmOpen.value = true
+    return
+  }
   if (!price.value || !amount.value) return
   const kind = selectedMarket.value?.kind ?? 'spot'
   pendingOrder.value = {
@@ -202,9 +233,14 @@ async function confirmOrder() {
   const p = pendingOrder.value
   if (!p) return
   confirming.value = true
-  const result = p.kind === 'perp'
-    ? await submitDerivativeOrder(p.side, p.price, p.amount, p.leverage ?? 1)
-    : await submitSpotOrder(p.side, p.price, p.amount)
+  let result: { txHash: string } | { error: string }
+  if (p.orderType === 'stop') {
+    result = await submitDerivativeStopOrder(p.side, p.trigger!, p.amount, p.stopKind!)
+  } else if (p.kind === 'perp') {
+    result = await submitDerivativeOrder(p.side, p.price, p.amount, p.leverage ?? 1)
+  } else {
+    result = await submitSpotOrder(p.side, p.price, p.amount)
+  }
   confirming.value = false
   if ('error' in result) {
     confirmOpen.value = false
@@ -212,8 +248,12 @@ async function confirmOrder() {
   } else {
     confirmOpen.value = false
     toast.add({
-      title: `${p.side === 'buy' ? 'Buy' : 'Sell'} placed`,
-      description: p.kind === 'perp'
+      title: p.orderType === 'stop'
+        ? `${p.stopKind === 'stop' ? 'Stop-loss' : 'Take-profit'} placed`
+        : `${p.side === 'buy' ? 'Buy' : 'Sell'} placed`,
+      description: p.orderType === 'stop'
+        ? `${p.side === 'buy' ? 'Buy' : 'Sell'} ${fmt(p.amount, 4)} @ trigger ${fmtPrice(p.trigger!)}`
+        : p.kind === 'perp'
         ? `${fmt(p.amount, 4)} ${baseSymbol.value} @ ${fmtPrice(p.price)} ${quoteSymbol.value} · ${p.leverage}x`
         : `${fmt(p.amount, 4)} ${baseSymbol.value} @ ${fmtPrice(p.price)} ${quoteSymbol.value}`,
       color: 'success',
@@ -324,7 +364,7 @@ watch(selectedMarket, () => {
 
     <div class="flex-none flex items-center gap-1 px-3 py-1.5 border-b border-border-soft">
       <button
-        v-for="t in (['limit', 'market'] as const)"
+        v-for="t in orderTypes"
         :key="t"
         class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors"
         :class="orderType === t
@@ -334,7 +374,28 @@ watch(selectedMarket, () => {
       >
         {{ t }}
       </button>
-      <div v-if="isPerp" class="ml-auto flex items-center gap-0.5">
+      <!-- SL/TP sub-toggle (only when stop order type selected) -->
+      <div v-if="isPerp && orderType === 'stop'" class="ml-auto flex items-center gap-0.5">
+        <button
+          class="px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors"
+          :class="stopKind === 'stop'
+            ? 'bg-ask/20 text-ask'
+            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+          @click="stopKind = 'stop'"
+        >
+          Stop-loss
+        </button>
+        <button
+          class="px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors"
+          :class="stopKind === 'take'
+            ? 'bg-bid/20 text-bid'
+            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+          @click="stopKind = 'take'"
+        >
+          Take-profit
+        </button>
+      </div>
+      <div v-else-if="isPerp" class="ml-auto flex items-center gap-0.5">
         <span class="text-[10px] text-[var(--ui-text-dimmed)] mr-1">Lev</span>
         <button
           v-for="lev in leverageOptions"
@@ -422,6 +483,26 @@ watch(selectedMarket, () => {
           </div>
         </div>
 
+        <!-- Stop-loss / Take-profit: trigger price field -->
+        <div v-else-if="orderType === 'stop'">
+          <span class="text-[10px] uppercase tracking-wider" :class="stopKind === 'stop' ? 'text-ask' : 'text-bid'">
+            {{ stopKind === 'stop' ? 'Stop-loss' : 'Take-profit' }} trigger ({{ quoteSymbol }})
+          </span>
+          <div class="mt-0.5 flex items-center rounded-md bg-surface-2 border border-border-soft focus-within:border-accent-dim transition-colors">
+            <input
+              v-model="triggerInput"
+              type="text"
+              inputmode="decimal"
+              :placeholder="fmtPrice(defaultPrice)"
+              class="flex-1 bg-transparent py-1.5 px-2.5 text-sm font-mono tabular-nums text-center outline-none"
+              @keydown.enter.prevent="amountInputEl?.focus()"
+            />
+          </div>
+          <p class="mt-1 text-[10px] text-[var(--ui-text-dimmed)] leading-snug">
+            Reduce-only — closes your {{ side === 'buy' ? 'short' : 'long' }} if triggered. No margin required.
+          </p>
+        </div>
+
         <div v-else class="flex items-center justify-between rounded-md bg-surface-2 px-3 py-1.5 text-sm">
           <span class="text-[var(--ui-text-dimmed)] text-[10px] uppercase tracking-wider">Market price</span>
           <span class="font-mono tabular-nums">{{ fmtPrice(defaultPrice) }}</span>
@@ -476,10 +557,14 @@ watch(selectedMarket, () => {
 
         <button
           class="w-full py-2.5 rounded-lg text-sm font-bold uppercase tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          :class="side === 'buy'
-            ? 'bg-bid/20 text-bid hover:bg-bid/30'
-            : 'bg-ask/20 text-ask hover:bg-ask/30'"
-          :disabled="!price || !amount || submitting || confirming || (!isConnected && !isDemo)"
+          :class="orderType === 'stop'
+            ? (stopKind === 'stop'
+              ? 'bg-ask/20 text-ask hover:bg-ask/30'
+              : 'bg-bid/20 text-bid hover:bg-bid/30')
+            : (side === 'buy'
+              ? 'bg-bid/20 text-bid hover:bg-bid/30'
+              : 'bg-ask/20 text-ask hover:bg-ask/30')"
+          :disabled="(orderType === 'stop' ? !triggerPrice : !price) || !amount || submitting || confirming || (!isConnected && !isDemo)"
           @click="submitOrder"
         >
           <template v-if="confirming">
@@ -487,6 +572,9 @@ watch(selectedMarket, () => {
           </template>
           <template v-else-if="!isConnected && !isDemo">
             Connect Wallet
+          </template>
+          <template v-else-if="orderType === 'stop'">
+            {{ stopKind === 'stop' ? 'Set Stop-loss' : 'Set Take-profit' }}
           </template>
           <template v-else>
             {{ side === 'buy' ? 'Buy' : 'Sell' }} {{ baseSymbol }}

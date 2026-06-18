@@ -36,6 +36,24 @@ export interface MarketRef {
   raw: SpotMarket | DerivativeMarket
 }
 
+/**
+ * Normalized derivative position in human-readable values. Used by the
+ * Positions panel. upnl is self-computed (the V2 endpoint may return "0").
+ */
+export interface PositionRow {
+  marketId: string
+  ticker: string
+  direction: 'long' | 'short'
+  quantity: number
+  entryPrice: number
+  markPrice: number
+  margin: number
+  liquidationPrice: number
+  upnl: number
+  upnlPct: number
+  leverage: number
+}
+
 export interface TokenInfo {
   denom: string
   symbol: string
@@ -1002,6 +1020,275 @@ export function useInjective() {
     }
   }
 
+  // ---- derivatives: positions (indexer, gRPC-web) ----
+  // Normalized to human values. upnl is self-computed because the V2 endpoint
+  // does not send with_upnl (returns "0"); we keep the indexer value as fallback.
+  const positions = useState<PositionRow[]>('inj-positions', () => [])
+
+  async function loadPositions() {
+    if (!address.value) {
+      positions.value = []
+      return
+    }
+    try {
+      const { derivApi } = await getEngine()
+      const sdk = await import('@injectivelabs/sdk-ts')
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+      const res = await derivApi.fetchPositionsV2({ subaccountId })
+      const list: any[] = (res as any)?.positions ?? res ?? []
+
+      positions.value = list.map((p: any): PositionRow => {
+        const market = markets.value.find((m) => m.marketId === p.marketId)
+        const qd = market?.quoteDecimals ?? 6
+        const div = 10 ** qd
+        const entry = Number(p.entryPrice) / div
+        const mark = Number(p.markPrice) / div
+        const qty = Number(p.quantity) // perp qty: chain == human
+        const margin = Number(p.margin) / div
+        const liq = Number(p.liquidationPrice) / div
+        const direction = p.direction === 'short' ? 'short' : 'long'
+        // Self-computed uPnL (long: (mark-entry)*qty, short: (entry-mark)*qty).
+        const indexerUpnl = Number(p.upnl) / div
+        const computed = direction === 'long'
+          ? (mark - entry) * qty
+          : (entry - mark) * qty
+        const upnl = Math.abs(indexerUpnl) > 0 ? indexerUpnl : computed
+        const upnlPct = margin > 0 ? (upnl / margin) * 100 : 0
+        const leverage = margin > 0 && entry > 0 ? (entry * qty) / margin : (market?.initialMarginRatio ? 1 / market.initialMarginRatio : 1)
+        return {
+          marketId: p.marketId,
+          ticker: market?.ticker ?? p.ticker ?? p.marketId.slice(0, 10),
+          direction,
+          quantity: qty,
+          entryPrice: entry,
+          markPrice: mark,
+          margin,
+          liquidationPrice: liq,
+          upnl,
+          upnlPct,
+          leverage,
+        }
+      })
+    } catch {
+      // positions are best-effort; keep last good list
+    }
+  }
+
+  // ---- derivatives: resting derivative orders incl. SL/TP (indexer) ----
+  async function loadDerivativeOrders() {
+    if (!address.value) return
+    try {
+      const { derivApi } = await getEngine()
+      const sdk = await import('@injectivelabs/sdk-ts')
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+      const res = await derivApi.fetchOrders({ subaccountId })
+      const derivOrders: any[] = (res as any)?.orders ?? res ?? []
+      // Tag + merge into openOrders so OpenOrders.vue can render both spot & perp.
+      const tagged = derivOrders.map((o: any) => ({ ...o, __kind: 'perp' as const }))
+      const spot = openOrders.value.filter((o: any) => o.__kind !== 'perp')
+      openOrders.value = [...spot, ...tagged]
+    } catch {
+      // keep last good orders
+    }
+  }
+
+  // ---- derivatives: close a position via reduce-only opposite order ----
+  async function closePosition(
+    pos: PositionRow,
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    const market = markets.value.find((m) => m.marketId === pos.marketId)
+    if (!market || market.kind !== 'perp') return { error: 'Not a perp market' }
+
+    submitting.value = true
+    try {
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/wallet-core'),
+      ])
+      const { network, endpoints } = await getNetwork()
+
+      const raw = market.raw as any
+      const tens = sdk.getDerivativeMarketTensMultiplier({
+        quoteDecimals: market.quoteDecimals,
+        minPriceTickSize: raw.minPriceTickSize,
+        minQuantityTickSize: raw.minQuantityTickSize,
+      })
+
+      // Limit price slightly through mark to cross quickly (0.1% buffer).
+      const crossPrice = pos.direction === 'long'
+        ? pos.markPrice * 0.999
+        : pos.markPrice * 1.001
+      const chainPrice = sdk.derivativePriceToChainPriceToFixed({
+        value: crossPrice,
+        tensMultiplier: tens.priceTensMultiplier,
+        quoteDecimals: market.quoteDecimals,
+      })
+      const chainQuantity = sdk.derivativeQuantityToChainQuantityToFixed({
+        value: pos.quantity,
+        tensMultiplier: tens.quantityTensMultiplier,
+      })
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+
+      const msg = sdk.MsgCreateDerivativeLimitOrder.fromJSON({
+        marketId: market.marketId,
+        subaccountId,
+        injectiveAddress: address.value,
+        // Opposite direction; margin 0 = reduce-only (closes the position).
+        orderType: (pos.direction === 'long' ? sdk.OrderType.SELL : sdk.OrderType.BUY) as any,
+        price: chainPrice,
+        margin: '0',
+        quantity: chainQuantity,
+        feeRecipient: address.value,
+      })
+
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network,
+        endpoints,
+        walletStrategy,
+      })
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadBalances()
+      loadSubaccountBalances()
+      loadPositions()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  // ---- derivatives: stop-loss / take-profit (conditional reduce-only order) ----
+  async function submitDerivativeStopOrder(
+    orderSide: 'buy' | 'sell',
+    humanTrigger: number,
+    humanQuantity: number,
+    kind: 'stop' | 'take',
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    const market = selectedMarket.value
+    if (!market?.marketId || market.kind !== 'perp') return { error: 'No perp market selected' }
+    if (!(humanTrigger > 0) || !(humanQuantity > 0)) return { error: 'Invalid trigger or quantity' }
+
+    submitting.value = true
+    try {
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/wallet-core'),
+      ])
+      const { network, endpoints } = await getNetwork()
+
+      const raw = market.raw as any
+      const tens = sdk.getDerivativeMarketTensMultiplier({
+        quoteDecimals: market.quoteDecimals,
+        minPriceTickSize: raw.minPriceTickSize,
+        minQuantityTickSize: raw.minQuantityTickSize,
+      })
+
+      const chainTrigger = sdk.derivativePriceToChainPriceToFixed({
+        value: humanTrigger,
+        tensMultiplier: tens.priceTensMultiplier,
+        quoteDecimals: market.quoteDecimals,
+      })
+      // Trigger order also needs a price (worst-acceptable fill). Use the trigger
+      // itself as the limit price for stop, and trigger for take — simple & safe.
+      const chainPrice = chainTrigger
+      const chainQuantity = sdk.derivativeQuantityToChainQuantityToFixed({
+        value: humanQuantity,
+        tensMultiplier: tens.quantityTensMultiplier,
+      })
+
+      // STOP_* triggers when price crosses *below* (SL); TAKE_* when *above* (TP).
+      // Combine with side: closing a long → SELL; closing a short → BUY.
+      const orderType = kind === 'stop'
+        ? (orderSide === 'sell' ? sdk.OrderType.STOP_SELL : sdk.OrderType.STOP_BUY)
+        : (orderSide === 'sell' ? sdk.OrderType.TAKE_SELL : sdk.OrderType.TAKE_BUY)
+
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+
+      const msg = sdk.MsgCreateDerivativeLimitOrder.fromJSON({
+        marketId: market.marketId,
+        subaccountId,
+        injectiveAddress: address.value,
+        orderType: orderType as any,
+        price: chainPrice,
+        triggerPrice: chainTrigger,
+        margin: '0', // reduce-only: SL/TP only close existing positions
+        quantity: chainQuantity,
+        feeRecipient: address.value,
+      })
+
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network,
+        endpoints,
+        walletStrategy,
+      })
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadPositions()
+      loadDerivativeOrders()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  // ---- derivatives: cancel a derivative order (incl. SL/TP) ----
+  async function cancelDerivativeOrder(
+    order: { marketId: string; orderHash: string; cid?: string },
+  ): Promise<{ txHash: string } | { error: string }> {
+    if (!address.value) return { error: 'Wallet not connected' }
+    try {
+      const [{ walletStrategy }, sdk, walletCore] = await Promise.all([
+        getEngine(),
+        import('@injectivelabs/sdk-ts'),
+        import('@injectivelabs/wallet-core'),
+      ])
+      const { network, endpoints } = await getNetwork()
+
+      const subaccountId = sdk.getDefaultSubaccountId(address.value)
+      const msg = sdk.MsgCancelDerivativeOrder.fromJSON({
+        marketId: order.marketId,
+        subaccountId,
+        injectiveAddress: address.value,
+        orderHash: order.orderHash,
+      })
+
+      const broadcaster = new walletCore.MsgBroadcaster({
+        network,
+        endpoints,
+        walletStrategy,
+      })
+      const response = await broadcaster.broadcast({
+        msgs: msg,
+        injectiveAddress: address.value,
+      })
+
+      loadDerivativeOrders()
+
+      return { txHash: response.txHash }
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Transaction failed'
+      return { error: msg.includes('User rejected') ? 'Rejected by user' : msg }
+    }
+  }
+
   return {
     // lifecycle
     init,
@@ -1070,5 +1357,12 @@ export function useInjective() {
     loadOpenOrders,
     cancellingIds,
     cancelSpotOrder,
+    // derivatives: positions + conditional orders
+    positions,
+    loadPositions,
+    loadDerivativeOrders,
+    closePosition,
+    submitDerivativeStopOrder,
+    cancelDerivativeOrder,
   }
 }

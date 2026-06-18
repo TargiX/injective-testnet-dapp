@@ -10,6 +10,7 @@ const {
   loadOpenOrders,
   cancellingIds,
   cancelSpotOrder,
+  cancelDerivativeOrder,
   selectedMarketId,
   markets,
   mode,
@@ -24,6 +25,17 @@ const visible = computed(() => {
   return openOrders.value.filter(o => o.marketId === selectedMarketId.value)
 })
 
+// Classify an order for the badge: SL / TP / plain.
+function orderBadge(o: any): { label: string; cls: string } | null {
+  const kind = o.__kind
+  if (kind !== 'perp') return null
+  const t = o.orderType ?? o.type ?? ''
+  const s = String(t)
+  if (s.includes('STOP')) return { label: 'SL', cls: 'bg-ask/15 text-ask' }
+  if (s.includes('TAKE')) return { label: 'TP', cls: 'bg-bid/15 text-bid' }
+  return { label: 'PERP', cls: 'bg-accent/15 text-accent' }
+}
+
 interface Row {
   orderHash: string
   cid: string
@@ -35,6 +47,7 @@ interface Row {
   total: number
   unfilled: number
   createdAt: number
+  raw: any
 }
 
 const rows = computed<Row[]>(() => {
@@ -66,12 +79,16 @@ const rows = computed<Row[]>(() => {
       total: qty,
       unfilled,
       createdAt: o.createdAt,
+      raw: o,
     }
   })
 })
 
-async function handleCancel(orderHash: string, marketId: string, cid?: string) {
-  const result = await cancelSpotOrder({ orderHash, marketId, cid })
+async function handleCancel(o: any) {
+  const isPerpOrder = o.__kind === 'perp'
+  const result = isPerpOrder
+    ? await cancelDerivativeOrder({ orderHash: o.orderHash, marketId: o.marketId, cid: o.cid })
+    : await cancelSpotOrder({ orderHash: o.orderHash, marketId: o.marketId, cid: o.cid })
   if ('error' in result) {
     toast.add({ title: 'Cancel failed', description: result.error, color: 'error' })
   } else {
@@ -135,9 +152,8 @@ onBeforeUnmount(() => {
       Loading…
     </div>
 
-    <div v-else-if="!rows.length" class="flex-1 flex flex-col items-center justify-center text-sm text-[var(--ui-text-muted)] py-6 gap-1">
-      <span>No open orders</span>
-      <span v-if="mode === 'perp'" class="text-[10px] text-[var(--ui-text-dimmed)]">Perp positions & orders — coming soon</span>
+    <div v-else-if="!rows.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)] py-6">
+      No open orders
     </div>
 
     <template v-else>
@@ -162,6 +178,13 @@ onBeforeUnmount(() => {
               {{ r.side === 'buy' ? 'B' : 'S' }}
             </span>
             <span class="text-[11px] max-lg:text-[10px] font-semibold truncate">{{ r.ticker }}</span>
+            <span
+              v-if="orderBadge(r.raw)"
+              class="text-[8px] font-bold uppercase px-1 py-0.5 rounded flex-none"
+              :class="orderBadge(r.raw)!.cls"
+            >
+              {{ orderBadge(r.raw)!.label }}
+            </span>
           </div>
           <span class="text-right font-mono tabular-nums text-[11px] max-lg:text-[10px] truncate">{{ fmtPrice(r.price) }}</span>
           <span class="text-right font-mono tabular-nums text-[11px] max-lg:text-[10px] text-[var(--ui-text-muted)] truncate">
@@ -175,7 +198,7 @@ onBeforeUnmount(() => {
               icon="i-lucide-x"
               :loading="cancellingIds.has(r.orderHash)"
               :disabled="cancellingIds.has(r.orderHash)"
-              @click="handleCancel(r.orderHash, r.marketId, r.cid)"
+              @click="handleCancel(r.raw)"
             />
           </span>
         </div>
