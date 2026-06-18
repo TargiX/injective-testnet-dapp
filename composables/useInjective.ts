@@ -617,10 +617,10 @@ export function useInjective() {
     try {
       const { chartApi } = await getEngine()
       const to = Math.floor(Date.now() / 1000)
-      const historyFn = market.kind === 'spot'
-        ? chartApi.spotMarketHistory
-        : chartApi.derivativeMarketHistory
-      const res = await historyFn({
+      // Call as a method (chartApi.fn(...)) not a detached reference — the
+      // gRPC client relies on `this` (this.client.methods). Detaching throws
+      // "Cannot read properties of undefined (reading 'methods')".
+      const req = {
         symbol: '',
         marketId: market.marketId,
         resolution,
@@ -628,7 +628,10 @@ export function useInjective() {
         to,
         countback,
         fillGaps: false,
-      }).response
+      }
+      const res = market.kind === 'spot'
+        ? (await chartApi.spotMarketHistory(req)).response
+        : (await chartApi.derivativeMarketHistory(req)).response
 
       const candles: PriceCandle[] = (res.t ?? [])
         .map((time: number, index: number) => ({
@@ -674,10 +677,8 @@ export function useInjective() {
     try {
       const { chartApi } = await getEngine()
       const to = Math.floor(Date.now() / 1000)
-      const historyFn = market.kind === 'spot'
-        ? chartApi.spotMarketHistory
-        : chartApi.derivativeMarketHistory
-      const res = await historyFn({
+      // Call as a method — see loadChartCandles for the `this`-binding note.
+      const req = {
         symbol: '',
         marketId: market.marketId,
         resolution: '60',
@@ -685,7 +686,10 @@ export function useInjective() {
         to,
         countback: 24,
         fillGaps: false,
-      }).response
+      }
+      const res = market.kind === 'spot'
+        ? (await chartApi.spotMarketHistory(req)).response
+        : (await chartApi.derivativeMarketHistory(req)).response
 
       const times = res.t ?? []
       if (!times.length) return
