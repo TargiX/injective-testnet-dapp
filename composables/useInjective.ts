@@ -69,6 +69,8 @@ export interface BalanceRow {
   decimals: number
   logo?: string
   name?: string
+  /** Chain the balance lives on ('injective' | 'osmosis' | 'cosmoshub'). */
+  chain?: string
 }
 
 export interface OrderbookLevel {
@@ -475,6 +477,7 @@ export function useInjective() {
           decimals: token?.decimals ?? 0,
           logo: token?.logo,
           name: token?.name,
+          chain: 'injective',
         }
       })
     } catch (e: any) {

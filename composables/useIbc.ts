@@ -25,6 +25,13 @@ export interface IbcRoute {
   channelId: string
   port: string // always 'transfer'
   explorerTx: string // %s = tx hash
+  /**
+   * Public Cosmos LCD base URL (CORS-open, verified `access-control-allow-origin: *`)
+   * used by useCrosschain to read bank balances on this chain. Mainnet only.
+   */
+  lcd: string
+  /** CoinGecko asset id, for USD pricing via the simple/price endpoint. */
+  coingeckoId: string
 }
 
 export interface RecentTransfer {
@@ -49,6 +56,9 @@ export const IBC_ROUTES: Record<IbcRouteKey, IbcRoute> = {
     channelId: 'channel-8',
     port: 'transfer',
     explorerTx: 'https://www.mintscan.io/osmosis/tx/%s',
+    // Official Osmosis LCD — CORS-open (`access-control-allow-origin: *`).
+    lcd: 'https://lcd.osmosis.zone',
+    coingeckoId: 'osmosis',
   },
   cosmoshub: {
     key: 'cosmoshub',
@@ -59,6 +69,9 @@ export const IBC_ROUTES: Record<IbcRouteKey, IbcRoute> = {
     channelId: 'channel-93',
     port: 'transfer',
     explorerTx: 'https://www.mintscan.io/cosmos/tx/%s',
+    // Polkachu public Cosmos Hub LCD — CORS-open (`access-control-allow-origin: *`).
+    lcd: 'https://cosmos-api.polkachu.com',
+    coingeckoId: 'cosmos',
   },
 }
 
