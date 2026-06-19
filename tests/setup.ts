@@ -38,6 +38,10 @@ Object.assign(globalThis, {
   reactive,
   nextTick,
   unref,
+  // Nuxt's $fetch auto-import — stubbed so composables that hit external
+  // endpoints (useCrosschain → CoinGecko / Cosmos LCD) don't touch the network
+  // in unit tests. Individual tests pass their own fetcher where needed.
+  $fetch: vi.fn(async () => ({})) as any,
 })
 
 // Reset shared state between tests so each test starts clean.

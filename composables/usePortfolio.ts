@@ -10,6 +10,7 @@
  * re-fetch them. Only trade history is fetched here (paginated, capped at 500).
  */
 import { useInjective } from '~/composables/useInjective'
+import { useCrosschain } from '~/composables/useCrosschain'
 
 export interface TradeRow {
   tradeId: string
@@ -46,6 +47,7 @@ export interface AllocationRow {
   usdValue: number | null // null = unpriced
   pct: number | null
   logo?: string
+  chain: string // 'injective' | 'osmosis' | 'cosmoshub'
 }
 
 const MAX_TRADES = 500
@@ -64,6 +66,13 @@ export function usePortfolio() {
     getApi,
   } = useInjective()
 
+  // Cross-chain balances + CoinGecko price feed (Osmosis / Cosmos Hub / INJ).
+  const {
+    allCrosschainBalances,
+    loadCrosschainBalances,
+    priceDenom: xcPriceDenom,
+  } = useCrosschain()
+
   const trades = useState<TradeRow[]>('pf-trades', () => [])
   const tradesLoading = useState<boolean>('pf-trades-loading', () => false)
   const tradesError = useState<string>('pf-trades-error', () => '')
@@ -81,8 +90,15 @@ export function usePortfolio() {
     return map
   })
 
-  /** Price a denom in quote (USD-ish) units using cached spot prices. */
+  /**
+   * Price a denom in USD. Prefer CoinGecko (covers INJ + cross-chain tokens
+   * uniformly); fall back to the Injective spot-market last price for denoms
+   * CoinGecko doesn't know (e.g. exotic market quote tokens). Returns null if
+   * neither source prices it.
+   */
   function priceDenom(denom: string): number | null {
+    const xc = xcPriceDenom(denom)
+    if (xc != null) return xc
     return priceByDenom.value[denom] ?? null
   }
 
@@ -197,30 +213,56 @@ export function usePortfolio() {
     }
   })
 
-  /** Asset allocation across bank + subaccount balances. */
+  /**
+   * Asset allocation across bank + subaccount balances on Injective, merged
+   * with cross-chain balances (Osmosis / Cosmos Hub). Keyed on `${chain}:${denom}`
+   * because the same asset has different denoms per chain (e.g. ATOM is `uatom`
+   * on Cosmos Hub but an `ibc/...` hash on Injective). Each row carries its
+   * chain for the group-by-chain UI.
+   */
   const assetAllocation = computed<AllocationRow[]>(() => {
-    const byDenom = new Map<string, { amount: number; symbol: string; logo?: string }>()
+    // Map<`${chain}:${denom}`, { amount, symbol, logo, chain }>
+    const byKey = new Map<string, { amount: number; symbol: string; logo?: string; chain: string }>()
     const toHuman = (amt: string, dec: number) => Number(amt) / 10 ** dec
 
-    // Bank balances
+    // Injective bank balances (+ subaccount margin, same denoms).
     for (const b of balances.value) {
-      const human = toHuman(b.amount, b.decimals)
-      byDenom.set(b.denom, { amount: human, symbol: b.symbol, logo: (b as any).logo })
+      const chain = b.chain ?? 'injective'
+      byKey.set(`${chain}:${b.denom}`, {
+        amount: toHuman(b.amount, b.decimals),
+        symbol: b.symbol,
+        logo: (b as any).logo,
+        chain,
+      })
     }
-    // Subaccount (margin) balances — add to existing
     for (const b of subaccountBalances.value) {
-      const existing = byDenom.get(b.denom)
-      const human = toHuman(b.amount, b.decimals)
-      byDenom.set(b.denom, {
-        amount: (existing?.amount ?? 0) + human,
+      const chain = b.chain ?? 'injective'
+      const k = `${chain}:${b.denom}`
+      const existing = byKey.get(k)
+      byKey.set(k, {
+        amount: (existing?.amount ?? 0) + toHuman(b.amount, b.decimals),
         symbol: existing?.symbol ?? b.symbol,
         logo: existing?.logo ?? (b as any).logo,
+        chain,
+      })
+    }
+    // Cross-chain balances (Osmosis / Cosmos Hub).
+    for (const b of allCrosschainBalances.value) {
+      const chain = b.chain ?? 'osmosis'
+      const k = `${chain}:${b.denom}`
+      const existing = byKey.get(k)
+      byKey.set(k, {
+        amount: (existing?.amount ?? 0) + toHuman(b.amount, b.decimals),
+        symbol: existing?.symbol ?? b.symbol,
+        logo: existing?.logo ?? (b as any).logo,
+        chain,
       })
     }
 
     const rows: AllocationRow[] = []
-    for (const [denom, info] of byDenom) {
+    for (const [key, info] of byKey) {
       if (info.amount <= 0) continue
+      const denom = key.slice(key.indexOf(':') + 1)
       const price = priceDenom(denom)
       rows.push({
         denom,
@@ -229,6 +271,7 @@ export function usePortfolio() {
         usdValue: price !== null ? price * info.amount : null,
         pct: null, // filled after total
         logo: info.logo,
+        chain: info.chain,
       })
     }
     // Compute pct of priced total.
@@ -236,7 +279,14 @@ export function usePortfolio() {
     for (const r of rows) {
       r.pct = pricedTotal > 0 && r.usdValue !== null ? (r.usdValue / pricedTotal) * 100 : null
     }
-    return rows.sort((a, b) => (b.usdValue ?? 0) - (a.usdValue ?? 0))
+    // Sort by USD value desc; within equal/none, Injective rows first.
+    const chainOrder: Record<string, number> = { injective: 0, osmosis: 1, cosmoshub: 2 }
+    return rows.sort((a, b) => {
+      const av = a.usdValue ?? 0
+      const bv = b.usdValue ?? 0
+      if (av !== bv) return bv - av
+      return (chainOrder[a.chain] ?? 9) - (chainOrder[b.chain] ?? 9)
+    })
   })
 
   const portfolioValue = computed(() =>
@@ -253,5 +303,7 @@ export function usePortfolio() {
     pnlStats,
     assetAllocation,
     portfolioValue,
+    // cross-chain passthrough (loaded from portfolio page on mount)
+    loadCrosschainBalances,
   }
 }

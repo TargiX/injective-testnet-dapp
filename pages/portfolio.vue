@@ -4,6 +4,7 @@ import { fmt, fmtPrice } from '~/utils/inj-format'
 const {
   address,
   isConnected,
+  isTestnet,
   balances,
   subaccountBalances,
   positions,
@@ -22,25 +23,41 @@ const {
   pnlStats,
   assetAllocation,
   portfolioValue,
+  loadCrosschainBalances,
 } = usePortfolio()
 
+// Cross-chain state (Osmosis / Cosmos Hub net worth + per-chain subtotals).
+const {
+  crosschainNetWorth,
+  perChainNetWorth,
+  activeChainCount,
+  crosschainLoading,
+  crosschainError,
+} = useCrosschain()
+
+async function loadAll() {
+  await Promise.all([
+    loadTradeHistory(),
+    loadPositions(),
+    loadBalances(),
+    loadSubaccountBalances(),
+    loadCrosschainBalances(),
+  ])
+}
+
 onMounted(async () => {
-  if (address.value) {
-    await Promise.all([
-      loadTradeHistory(),
-      loadPositions(),
-      loadBalances(),
-      loadSubaccountBalances(),
-    ])
-  }
+  if (address.value) await loadAll()
 })
 
 // Reload when the wallet connects/changes.
 watch(address, async (addr) => {
-  if (addr) {
-    await Promise.all([loadTradeHistory(), loadPositions(), loadBalances(), loadSubaccountBalances()])
-  }
+  if (addr) await loadAll()
 })
+
+// Refresh cross-chain balances + prices on demand.
+function refreshCrosschain() {
+  loadCrosschainBalances(true)
+}
 
 useHead({ title: 'Portfolio · Injective Trading' })
 </script>
@@ -71,6 +88,61 @@ useHead({ title: 'Portfolio · Injective Trading' })
             <p class="text-xl font-bold font-mono tabular-nums">${{ fmt(portfolioValue, 2) }}</p>
             <p class="text-[9px] text-[var(--ui-text-dimmed)]">priced assets only</p>
           </div>
+        </div>
+
+        <!-- Cross-chain summary strip (mainnet only) -->
+        <div
+          v-if="!isTestnet"
+          class="rounded-lg ring-1 ring-[var(--ui-border)] bg-surface-2/50 p-3"
+        >
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">
+                Cross-chain · {{ activeChainCount + 1 }} chains
+              </span>
+              <UButton
+                variant="ghost"
+                size="xs"
+                icon="i-lucide-refresh-cw"
+                :loading="crosschainLoading"
+                @click="refreshCrosschain"
+              />
+            </div>
+            <div class="flex items-center gap-3 text-[11px] font-mono tabular-nums">
+              <span class="flex items-center gap-1">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-accent" />
+                Injective
+                <span class="text-[var(--ui-text-muted)]">${{ fmt(portfolioValue - crosschainNetWorth, 2) }}</span>
+              </span>
+              <span
+                v-for="(val, label) in perChainNetWorth"
+                :key="label"
+                class="flex items-center gap-1"
+              >
+                <span
+                  class="inline-block w-1.5 h-1.5 rounded-full"
+                  :class="label === 'Osmosis' ? 'bg-[#7Aleaf]' : 'bg-blue-400'"
+                />
+                {{ label }}
+                <span class="text-[var(--ui-text-muted)]">${{ fmt(val, 2) }}</span>
+              </span>
+            </div>
+          </div>
+          <div v-if="Object.keys(crosschainError).length" class="mt-1.5 flex flex-wrap gap-2">
+            <span
+              v-for="(err, chain) in crosschainError"
+              :key="chain"
+              class="text-[9px] text-yellow-500/80"
+            >
+              {{ chain }}: {{ err }}
+            </span>
+          </div>
+        </div>
+        <div
+          v-else
+          class="rounded-lg ring-1 ring-[var(--ui-border)] bg-surface-2/50 p-2.5 text-[10px] text-[var(--ui-text-dimmed)]"
+        >
+          Cross-chain balances are mainnet-only — switch from testnet to see Osmosis / Cosmos Hub holdings.
         </div>
 
         <!-- P&L summary cards -->
