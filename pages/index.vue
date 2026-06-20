@@ -133,24 +133,27 @@ watch(selectedMarketId, () => {
           <div class="flex-1 overflow-hidden flex flex-col rounded-lg bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
             <div class="flex-none flex items-center gap-0.5 px-3 py-1.5 border-b border-border-soft">
               <button
-                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
                 :class="bottomTab === 'orderbook' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
                 @click="bottomTab = 'orderbook'"
               >
+                <UIcon name="i-lucide-book-open" class="size-3.5" />
                 Order Book
               </button>
               <button
-                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
                 :class="bottomTab === 'trades' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
                 @click="bottomTab = 'trades'"
               >
+                <UIcon name="i-lucide-zap" class="size-3.5" />
                 Trades
               </button>
               <button
-                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
                 :class="bottomTab === 'balances' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
                 @click="bottomTab = 'balances'"
               >
+                <UIcon name="i-lucide-wallet" class="size-3.5" />
                 Balances
               </button>
             </div>
@@ -167,17 +170,19 @@ watch(selectedMarketId, () => {
             <!-- Right-panel segmented control: Positions (perp) | Orders -->
             <div v-if="mode === 'perp'" class="flex-none flex items-center gap-0.5 px-3 py-1.5 border-b border-border-soft">
               <button
-                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
                 :class="rightTab === 'positions' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
                 @click="rightTab = 'positions'"
               >
+                <UIcon name="i-lucide-crosshair" class="size-3.5" />
                 Positions
               </button>
               <button
-                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
                 :class="rightTab === 'orders' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
                 @click="rightTab = 'orders'"
               >
+                <UIcon name="i-lucide-inbox" class="size-3.5" />
                 Orders
               </button>
             </div>
@@ -203,24 +208,27 @@ watch(selectedMarketId, () => {
         <div v-show="mobileTab === 'book'" class="h-full overflow-hidden flex flex-col rounded-lg bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
           <div class="flex-none flex items-center gap-0.5 px-3 py-1.5 border-b border-border-soft">
             <button
-              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
               :class="bottomTab === 'orderbook' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)]'"
               @click="bottomTab = 'orderbook'"
             >
+              <UIcon name="i-lucide-book-open" class="size-3.5" />
               Order Book
             </button>
             <button
-              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
               :class="bottomTab === 'trades' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)]'"
               @click="bottomTab = 'trades'"
             >
+              <UIcon name="i-lucide-zap" class="size-3.5" />
               Trades
             </button>
             <button
-              class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+              class="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
               :class="bottomTab === 'balances' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)]'"
               @click="bottomTab = 'balances'"
             >
+              <UIcon name="i-lucide-wallet" class="size-3.5" />
               Balances
             </button>
           </div>
@@ -261,7 +269,7 @@ watch(selectedMarketId, () => {
       </main>
 
       <nav
-        class="flex-none flex items-stretch justify-around border-t border-border-soft bg-surface-1"
+        class="flex-none flex items-stretch justify-around border-t border-border-soft bg-surface-1/85 backdrop-blur-md"
         style="padding-bottom: env(safe-area-inset-bottom, 0px)"
       >
         <button

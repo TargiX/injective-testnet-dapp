@@ -47,7 +47,11 @@ async function copyAddress() {
       >
         <span class="capitalize text-accent font-semibold">{{ walletName }}</span>
         <span class="font-mono tabular-nums">{{ shortAddress(address) }}</span>
-        <span class="text-[var(--ui-text-dimmed)]">{{ copied ? '✓' : '⧉' }}</span>
+        <UIcon
+          :name="copied ? 'i-lucide-check' : 'i-lucide-copy'"
+          class="size-3.5 text-[var(--ui-text-dimmed)]"
+          :class="copied ? 'text-bid' : ''"
+        />
       </UButton>
       <UButton variant="ghost" @click="disconnect">
         Disconnect

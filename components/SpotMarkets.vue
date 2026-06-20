@@ -45,25 +45,28 @@ const filtered = computed(() => {
 <template>
   <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
     <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
-      <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
-        <button
-          class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
-          :class="mode === 'spot'
-            ? 'bg-surface-3 text-[var(--ui-text)]'
-            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
-          @click="switchMode('spot')"
-        >
-          Spot
-        </button>
-        <button
-          class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
-          :class="mode === 'perp'
-            ? 'bg-surface-3 text-[var(--ui-text)]'
-            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
-          @click="switchMode('perp')"
-        >
-          Perp
-        </button>
+      <div class="flex items-center gap-2">
+        <UIcon name="i-lucide-list" class="size-3.5 text-accent" />
+        <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
+          <button
+            class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="mode === 'spot'
+              ? 'bg-surface-3 text-[var(--ui-text)]'
+              : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+            @click="switchMode('spot')"
+          >
+            Spot
+          </button>
+          <button
+            class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="mode === 'perp'
+              ? 'bg-surface-3 text-[var(--ui-text)]'
+              : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+            @click="switchMode('perp')"
+          >
+            Perp
+          </button>
+        </div>
       </div>
       <UBadge variant="subtle" size="sm">{{ markets.length }}</UBadge>
     </div>
@@ -78,9 +81,12 @@ const filtered = computed(() => {
     </div>
 
     <div v-if="marketsError" class="p-4 text-ask text-sm">{{ marketsError }}</div>
-    <div v-else-if="marketsLoading && !markets.length" class="p-4 text-sm text-[var(--ui-text-muted)]">
-      Loading markets…
-    </div>
+    <EmptyState
+      v-else-if="marketsLoading && !markets.length"
+      icon="i-lucide-list"
+      message="Loading markets"
+      loading
+    />
 
     <ul v-else class="list-none m-0 p-1 overflow-y-auto flex-1 min-h-0">
       <li
@@ -94,16 +100,12 @@ const filtered = computed(() => {
           class="flex-none w-5 h-5 grid place-items-center text-[var(--ui-text-dimmed)] hover:text-accent transition-colors"
           @click.stop="toggleFav(m.marketId)"
         >
-          <svg
-            class="w-3.5 h-3.5"
-            viewBox="0 0 24 24"
-            :fill="favorites.includes(m.marketId) ? 'currentColor' : 'none'"
-            stroke="currentColor"
-            stroke-width="2"
+          <UIcon
+            name="i-lucide-star"
+            class="size-3.5"
             :class="favorites.includes(m.marketId) ? 'text-accent' : ''"
-          >
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
+            :filled="favorites.includes(m.marketId)"
+          />
         </button>
         <TokenIcon :logo="(m.raw as any)?.baseToken?.logo" :symbol="m.baseSymbol" :size="18" />
         <span class="text-[13px] font-semibold whitespace-nowrap leading-tight">
@@ -121,8 +123,9 @@ const filtered = computed(() => {
           {{ cleanName((m.raw as any)?.baseToken?.name) }}
         </span>
       </li>
-      <li v-if="!filtered.length" class="p-4 text-sm text-[var(--ui-text-muted)] text-center cursor-default">
-        No matches.
+      <li v-if="!filtered.length" class="flex flex-col items-center justify-center gap-2 py-8 text-[var(--ui-text-muted)] cursor-default">
+        <UIcon name="i-lucide-search-x" class="size-7 text-[var(--ui-text-dimmed)]" />
+        <span class="text-sm">No matches.</span>
       </li>
     </ul>
   </div>

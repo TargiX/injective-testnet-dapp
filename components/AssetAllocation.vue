@@ -16,7 +16,7 @@ defineProps<{
 // Colored dot per chain for the cross-chain badge. Injective rows omit the badge
 // (it's the home chain — badges only flag remote-held assets).
 const chainDot: Record<string, string> = {
-  osmosis: 'bg-[#7Aleaf]',
+  osmosis: 'bg-purple-400',
   cosmoshub: 'bg-blue-400',
 }
 const chainLabel: Record<string, string> = {
@@ -44,7 +44,7 @@ const chainLabel: Record<string, string> = {
       <div class="flex-1 h-2 rounded-full bg-surface-2 overflow-hidden">
         <div
           class="h-full rounded-full transition-all"
-          :class="r.usdValue === null ? 'bg-[var(--ui-text-dimmed)]' : 'bg-accent'"
+          :class="r.usdValue === null ? 'bg-[var(--ui-text-dimmed)]' : 'bg-gradient-to-r from-accent to-accent-dim'"
           :style="{ width: (r.pct ?? 0) + '%' }"
         />
       </div>

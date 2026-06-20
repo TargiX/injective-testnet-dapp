@@ -85,7 +85,10 @@ const updatedLabel = computed(() => {
   <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
     <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Order Book</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)] flex items-center gap-1.5">
+          <UIcon name="i-lucide-book-open" class="size-3.5 text-accent" />
+          Order Book
+        </span>
       </div>
       <UBadge variant="subtle" color="success" size="sm">
         <span class="inline-block w-1.5 h-1.5 rounded-full bg-bid mr-1 shadow-glow-bid" />
@@ -93,7 +96,10 @@ const updatedLabel = computed(() => {
       </UBadge>
     </div>
 
-    <div v-if="!selectedMarket" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">Select a market.</div>
+    <div v-if="!selectedMarket" class="flex-1 flex flex-col items-center justify-center gap-2 text-[var(--ui-text-muted)]">
+      <UIcon name="i-lucide-book-open" class="size-7 text-[var(--ui-text-dimmed)]" />
+      <span class="text-sm">Select a market.</span>
+    </div>
 
     <template v-else>
       <div class="flex-none grid grid-cols-[1.2fr_1fr_1fr] max-lg:grid-cols-[1.2fr_1fr] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">

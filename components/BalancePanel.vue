@@ -21,7 +21,10 @@ const visible = computed(() =>
 <template>
   <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
     <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
-      <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Wallet</span>
+      <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)] flex items-center gap-1.5">
+        <UIcon name="i-lucide-wallet" class="size-3.5 text-accent" />
+        Wallet
+      </span>
       <div class="flex items-center gap-2">
         <UBadge v-if="isDemo" variant="subtle" color="warning" size="sm">read-only</UBadge>
         <a
@@ -43,16 +46,22 @@ const visible = computed(() =>
       </div>
     </div>
 
-    <div v-if="balancesLoading && !balances.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">
-      Loading…
-    </div>
+    <EmptyState
+      v-if="balancesLoading && !balances.length"
+      icon="i-lucide-wallet"
+      message="Loading balances"
+      loading
+    />
 
-    <div v-else-if="!visible.length" class="flex-1 flex flex-col items-center justify-center p-4 gap-1">
-      <p class="text-sm text-[var(--ui-text-muted)]">No non-zero balances.</p>
-      <p class="text-[11px] text-[var(--ui-text-dimmed)]">
-        Get INJ from an
-        <a href="https://hub.injective.network/bridge" target="_blank" rel="noopener" class="text-accent hover:underline">exchange or bridge</a>.
-      </p>
+    <div v-else-if="!visible.length" class="flex-1 flex flex-col items-center justify-center p-4 gap-2 text-[var(--ui-text-muted)]">
+      <UIcon name="i-lucide-wallet" class="size-7 text-[var(--ui-text-dimmed)]" />
+      <div class="text-center">
+        <p class="text-sm">No non-zero balances.</p>
+        <p class="text-[11px] text-[var(--ui-text-dimmed)] mt-1">
+          Get INJ from an
+          <a href="https://hub.injective.network/bridge" target="_blank" rel="noopener" class="text-accent hover:underline">exchange or bridge</a>.
+        </p>
+      </div>
     </div>
 
     <template v-else>
