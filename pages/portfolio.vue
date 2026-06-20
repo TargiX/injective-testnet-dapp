@@ -121,7 +121,7 @@ useHead({ title: 'Portfolio · Injective Trading' })
               >
                 <span
                   class="inline-block w-1.5 h-1.5 rounded-full"
-                  :class="label === 'Osmosis' ? 'bg-[#7Aleaf]' : 'bg-blue-400'"
+                  :class="label === 'Osmosis' ? 'bg-purple-400' : 'bg-blue-400'"
                 />
                 {{ label }}
                 <span class="text-[var(--ui-text-muted)]">${{ fmt(val, 2) }}</span>
@@ -148,7 +148,10 @@ useHead({ title: 'Portfolio · Injective Trading' })
         <!-- P&L summary cards -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-3">
-            <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Realized PnL</span>
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Realized PnL</span>
+              <UIcon name="i-lucide-trending-up" class="size-4 text-accent/70" />
+            </div>
             <p
               class="text-lg font-bold font-mono tabular-nums mt-1"
               :class="pnlStats.realizedTotal >= 0 ? 'text-bid' : 'text-ask'"
@@ -157,7 +160,10 @@ useHead({ title: 'Portfolio · Injective Trading' })
             </p>
           </div>
           <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-3">
-            <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Unrealized PnL</span>
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Unrealized PnL</span>
+              <UIcon name="i-lucide-line-chart" class="size-4 text-accent/70" />
+            </div>
             <p
               class="text-lg font-bold font-mono tabular-nums mt-1"
               :class="pnlStats.unrealizedTotal >= 0 ? 'text-bid' : 'text-ask'"
@@ -166,13 +172,19 @@ useHead({ title: 'Portfolio · Injective Trading' })
             </p>
           </div>
           <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-3">
-            <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Fees Paid</span>
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Fees Paid</span>
+              <UIcon name="i-lucide-receipt" class="size-4 text-[var(--ui-text-dimmed)]" />
+            </div>
             <p class="text-lg font-bold font-mono tabular-nums mt-1 text-[var(--ui-text-muted)]">
               ${{ fmt(pnlStats.feesPaid, 2) }}
             </p>
           </div>
           <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-3">
-            <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Trades</span>
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)]">Trades</span>
+              <UIcon name="i-lucide-arrow-left-right" class="size-4 text-[var(--ui-text-dimmed)]" />
+            </div>
             <p class="text-lg font-bold font-mono tabular-nums mt-1">{{ pnlStats.tradeCount }}</p>
           </div>
         </div>
@@ -180,7 +192,10 @@ useHead({ title: 'Portfolio · Injective Trading' })
         <!-- PnL chart -->
         <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-4">
           <div class="flex items-center justify-between mb-2">
-            <h2 class="text-sm font-bold uppercase tracking-wider">Perp PnL</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <UIcon name="i-lucide-trending-up" class="size-4 text-accent" />
+              Perp PnL
+            </h2>
             <span class="text-[10px] text-[var(--ui-text-dimmed)]">Realized + unrealized</span>
           </div>
           <div class="h-[280px]">
@@ -192,18 +207,26 @@ useHead({ title: 'Portfolio · Injective Trading' })
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <!-- Asset allocation -->
           <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-4">
-            <h2 class="text-sm font-bold uppercase tracking-wider mb-3">Asset Allocation</h2>
-            <div v-if="!assetAllocation.length" class="text-sm text-[var(--ui-text-muted)] py-4 text-center">
-              No balances
+            <h2 class="text-sm font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <UIcon name="i-lucide-pie-chart" class="size-4 text-accent" />
+              Asset Allocation
+            </h2>
+            <div v-if="!assetAllocation.length" class="flex flex-col items-center justify-center gap-2 py-8 text-[var(--ui-text-muted)]">
+              <UIcon name="i-lucide-pie-chart" class="size-7 text-[var(--ui-text-dimmed)]" />
+              <span class="text-sm">No balances</span>
             </div>
             <AssetAllocation v-else :rows="assetAllocation" />
           </div>
 
           <!-- Open positions -->
           <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-4">
-            <h2 class="text-sm font-bold uppercase tracking-wider mb-3">Open Positions</h2>
-            <div v-if="!positions.length" class="text-sm text-[var(--ui-text-muted)] py-4 text-center">
-              No open positions
+            <h2 class="text-sm font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <UIcon name="i-lucide-crosshair" class="size-4 text-accent" />
+              Open Positions
+            </h2>
+            <div v-if="!positions.length" class="flex flex-col items-center justify-center gap-2 py-8 text-[var(--ui-text-muted)]">
+              <UIcon name="i-lucide-crosshair" class="size-7 text-[var(--ui-text-dimmed)]" />
+              <span class="text-sm">No open positions</span>
             </div>
             <div v-else class="space-y-1.5">
               <div
@@ -233,7 +256,10 @@ useHead({ title: 'Portfolio · Injective Trading' })
         <!-- Trade history -->
         <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-4">
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-bold uppercase tracking-wider">Trade History</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <UIcon name="i-lucide-history" class="size-4 text-accent" />
+              Trade History
+            </h2>
             <UButton
               v-if="trades.length"
               variant="ghost"
@@ -244,11 +270,13 @@ useHead({ title: 'Portfolio · Injective Trading' })
             />
           </div>
           <div v-if="tradesError" class="text-sm text-ask py-4 text-center">{{ tradesError }}</div>
-          <div v-else-if="tradesLoading && !trades.length" class="text-sm text-[var(--ui-text-muted)] py-4 text-center">
-            Loading trades…
+          <div v-else-if="tradesLoading && !trades.length" class="flex flex-col items-center justify-center gap-2 py-8 text-[var(--ui-text-muted)]">
+            <UIcon name="i-lucide-loader-circle" class="size-7 text-[var(--ui-text-dimmed)] animate-spin" />
+            <span class="text-sm">Loading trades…</span>
           </div>
-          <div v-else-if="!trades.length" class="text-sm text-[var(--ui-text-muted)] py-4 text-center">
-            No trades yet
+          <div v-else-if="!trades.length" class="flex flex-col items-center justify-center gap-2 py-8 text-[var(--ui-text-muted)]">
+            <UIcon name="i-lucide-history" class="size-7 text-[var(--ui-text-dimmed)]" />
+            <span class="text-sm">No trades yet</span>
           </div>
           <TradeHistoryTable v-else :trades="trades" />
           <p v-if="trades.length >= 500" class="pt-2 text-[9px] text-[var(--ui-text-dimmed)]">

@@ -285,7 +285,10 @@ onBeforeUnmount(() => {
   <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
     <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Chart</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)] flex items-center gap-1.5">
+          <UIcon name="i-lucide-candlestick-chart" class="size-3.5 text-accent" />
+          Chart
+        </span>
         <UBadge variant="subtle" color="neutral" size="sm">
           {{ chartMode === 'candle' ? 'Candles' : 'Line' }}
         </UBadge>

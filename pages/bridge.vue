@@ -329,7 +329,10 @@ useHead({ title: 'Bridge · Injective Trading' })
           <div class="lg:col-span-2 space-y-4">
             <!-- Route summary -->
             <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-4 space-y-2.5">
-              <h2 class="text-sm font-bold uppercase tracking-wider">Route</h2>
+              <h2 class="text-sm font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <UIcon name="i-lucide-route" class="size-4 text-accent" />
+                Route
+              </h2>
               <div class="flex items-center gap-2 text-sm">
                 <span class="font-mono px-2 py-1 rounded bg-surface-2 text-[var(--ui-text-muted)]">inj1…</span>
                 <UIcon name="i-lucide-arrow-right" class="size-4 text-accent flex-none" />
@@ -359,9 +362,13 @@ useHead({ title: 'Bridge · Injective Trading' })
 
             <!-- Recent transfers -->
             <div class="rounded-lg bg-[var(--ui-bg)] ring-1 ring-[var(--ui-border)] p-4">
-              <h2 class="text-sm font-bold uppercase tracking-wider mb-2">Recent Transfers</h2>
-              <div v-if="!recentTransfers.length" class="text-sm text-[var(--ui-text-muted)] py-3 text-center">
-                No transfers yet
+              <h2 class="text-sm font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <UIcon name="i-lucide-history" class="size-4 text-accent" />
+                Recent Transfers
+              </h2>
+              <div v-if="!recentTransfers.length" class="flex flex-col items-center justify-center gap-2 py-6 text-[var(--ui-text-muted)]">
+                <UIcon name="i-lucide-arrow-left-right" class="size-7 text-[var(--ui-text-dimmed)]" />
+                <span class="text-sm">No transfers yet</span>
               </div>
               <div v-else class="space-y-2">
                 <a

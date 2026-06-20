@@ -46,13 +46,18 @@ const rows = computed<TradeRow[]>(() => {
 
 <template>
   <div class="h-full flex flex-col">
-    <div v-if="tradesLoading && !rows.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">
-      Loading…
-    </div>
+    <EmptyState
+      v-if="tradesLoading && !rows.length"
+      icon="i-lucide-zap"
+      message="Loading trades"
+      loading
+    />
 
-    <div v-else-if="!rows.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">
-      No recent trades
-    </div>
+    <EmptyState
+      v-else-if="!rows.length"
+      icon="i-lucide-zap"
+      message="No recent trades"
+    />
 
     <template v-else>
       <div class="flex-none grid grid-cols-[1fr_1fr_1fr_auto] max-lg:grid-cols-[1fr_1fr_auto] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">

@@ -12,6 +12,11 @@ let areaSeries: any = null
 let resizeObserver: ResizeObserver | null = null
 let lw: any = null
 
+// PnL color: green when the final cumulative value is >= 0, red below.
+// Mirrors the bid/ask semantics used everywhere else in the app.
+const GREEN = { line: '#4ade80', top: 'rgba(74,222,128,0.25)', bottom: 'rgba(74,222,128,0.02)' }
+const RED = { line: '#f0556a', top: 'rgba(240,85,106,0.25)', bottom: 'rgba(240,85,106,0.02)' }
+
 async function initChart() {
   if (chartInstance) return
   const el = chartContainer.value
@@ -49,9 +54,9 @@ async function initChart() {
   })
 
   areaSeries = chartInstance.addAreaSeries({
-    lineColor: '#4ade80',
-    topColor: 'rgba(74,222,128,0.25)',
-    bottomColor: 'rgba(74,222,128,0.02)',
+    lineColor: GREEN.line,
+    topColor: GREEN.top,
+    bottomColor: GREEN.bottom,
     lineWidth: 2,
     priceLineVisible: false,
   })
@@ -76,6 +81,12 @@ function renderData() {
     data.push({ time: Math.floor(Date.now() / 1000) as any, value: last.value + props.unrealized })
   }
   areaSeries.setData(data)
+
+  // Recolor the area based on the final cumulative value (incl. unrealized).
+  const finalValue = data.length ? data[data.length - 1].value : 0
+  const c = finalValue >= 0 ? GREEN : RED
+  areaSeries.applyOptions({ lineColor: c.line, topColor: c.top, bottomColor: c.bottom })
+
   chartInstance?.timeScale().fitContent()
 }
 
@@ -91,9 +102,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="h-full flex flex-col">
-    <div v-if="!series.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">
+    <div v-if="!series.length" class="flex-1 flex flex-col items-center justify-center gap-2 text-[var(--ui-text-muted)]">
+      <UIcon name="i-lucide-line-chart" class="size-8 text-[var(--ui-text-dimmed)]" />
       <div class="text-center">
-        <p>No perp trades yet</p>
+        <p class="text-sm">No perp trades yet</p>
         <p class="text-[10px] text-[var(--ui-text-dimmed)] mt-1">Realized PnL appears here after your first perp trade</p>
       </div>
     </div>

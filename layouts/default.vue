@@ -8,7 +8,7 @@ const route = useRoute()
        no-scroll screen — panels clip their own content. Portfolio opts into
        scrolling via its own `overflow-y-auto` main. -->
   <div class="h-dvh flex flex-col bg-surface text-[var(--ui-text)] overflow-hidden">
-    <header class="flex-none flex items-center justify-between gap-4 px-4 lg:px-5 py-3 border-b border-border-soft">
+    <header class="flex-none flex items-center justify-between gap-4 px-4 lg:px-5 py-3 border-b border-border-soft backdrop-blur-md bg-surface/80 sticky top-0 z-30">
       <div class="flex items-center gap-3">
         <NuxtLink to="/" class="w-9 h-9 grid place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-dim text-surface font-extrabold text-base hover:opacity-90 transition-opacity">
           ▚
@@ -17,24 +17,27 @@ const route = useRoute()
         <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
           <NuxtLink
             to="/"
-            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
+            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
             :class="route.path === '/' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
           >
-            Terminal
+            <UIcon name="i-lucide-layout-dashboard" class="size-3.5" />
+            <span>Terminal</span>
           </NuxtLink>
           <NuxtLink
             to="/portfolio"
-            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
+            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
             :class="route.path === '/portfolio' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
           >
-            Portfolio
+            <UIcon name="i-lucide-briefcase" class="size-3.5" />
+            <span>Portfolio</span>
           </NuxtLink>
           <NuxtLink
             to="/bridge"
-            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
+            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
             :class="route.path === '/bridge' ? 'bg-surface-3 text-[var(--ui-text)]' : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
           >
-            Bridge
+            <UIcon name="i-lucide-arrow-left-right" class="size-3.5" />
+            <span>Bridge</span>
           </NuxtLink>
         </div>
         <div class="hidden sm:block">

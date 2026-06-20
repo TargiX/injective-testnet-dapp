@@ -16,6 +16,7 @@
   --color-border-soft: #1b2230;
 
   --shadow-glow-bid: 0 0 0 3px rgba(31, 184, 122, 0.18);
+  --shadow-glow-accent: 0 0 0 3px rgba(0, 194, 168, 0.18);
 }
 
 @layer base {

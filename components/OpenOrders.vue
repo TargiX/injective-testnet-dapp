@@ -116,7 +116,10 @@ onBeforeUnmount(() => {
   <div class="h-full flex flex-col rounded-lg overflow-hidden bg-[var(--ui-bg)] ring ring-[var(--ui-border)]">
     <div class="flex-none flex items-center justify-between px-4 py-2 border-b border-border-soft">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)]">Open Orders</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-[var(--ui-text-muted)] flex items-center gap-1.5">
+          <UIcon name="i-lucide-inbox" class="size-3.5 text-accent" />
+          Open Orders
+        </span>
         <UBadge v-if="rows.length" variant="subtle" size="sm">{{ rows.length }}</UBadge>
       </div>
       <div class="flex items-center gap-1">
@@ -144,17 +147,24 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="!isConnected" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)] py-6">
-      Connect wallet to view orders
-    </div>
+    <EmptyState
+      v-if="!isConnected"
+      icon="i-lucide-wallet"
+      message="Connect wallet to view orders"
+    />
 
-    <div v-else-if="ordersLoading && !openOrders.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)]">
-      Loading…
-    </div>
+    <EmptyState
+      v-else-if="ordersLoading && !openOrders.length"
+      icon="i-lucide-inbox"
+      message="Loading orders"
+      loading
+    />
 
-    <div v-else-if="!rows.length" class="flex-1 flex items-center justify-center text-sm text-[var(--ui-text-muted)] py-6">
-      No open orders
-    </div>
+    <EmptyState
+      v-else-if="!rows.length"
+      icon="i-lucide-inbox"
+      message="No open orders"
+    />
 
     <template v-else>
       <div class="flex-none grid grid-cols-[1fr_1fr_1fr_1fr_auto] max-lg:grid-cols-[1fr_1fr_1fr_auto] px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--ui-text-dimmed)] border-b border-border-soft">
