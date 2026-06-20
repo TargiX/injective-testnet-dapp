@@ -1,6 +1,6 @@
 import type { DerivativeMarket, SpotMarket } from '@injectivelabs/sdk-ts'
 
-export type WalletId = 'keplr' | 'cosmostation'
+export type WalletId = 'keplr'
 
 export type MarketMode = 'spot' | 'perp'
 
@@ -183,10 +183,6 @@ async function createEngine(): Promise<Engine> {
       [Wallet.Keplr]: new walletCosmos.CosmosWalletStrategy({
         chainId: ChainId.Mainnet,
         wallet: Wallet.Keplr,
-      }),
-      [Wallet.Cosmostation]: new walletCosmos.CosmosWalletStrategy({
-        chainId: ChainId.Mainnet,
-        wallet: Wallet.Cosmostation,
       }),
     },
   })
@@ -401,12 +397,10 @@ export function useInjective() {
    * missing at that instant. To avoid a misleading error right after install,
    * we poll for the global for up to ~3s before handing off to the SDK.
    */
-  function walletGlobal(walletId: WalletId): any {
+  function walletGlobal(_walletId: WalletId): any {
+    // Keplr injects window.keplr. Kept the walletId param so the signature stays
+    // stable if we add wallets later.
     const w = typeof window !== 'undefined' ? (window as any) : {}
-    if (walletId === 'cosmostation') {
-      // Cosmostation injects window.cosmostation.providers.keplr (a Keplr-compatible API).
-      return w.cosmostation?.providers?.keplr
-    }
     return w.keplr
   }
 
@@ -466,18 +460,14 @@ export function useInjective() {
       const found = await waitForWallet(walletId)
       if (!found) {
         throw new Error(
-          `${walletId === 'cosmostation' ? 'Cosmostation' : 'Keplr'} not detected. ` +
-          'If you just installed the extension, refresh the page and try again.',
+          'Keplr not detected. If you just installed the extension, refresh the page and try again.',
         )
       }
 
       const { walletStrategy, Wallet } = await getEngine()
-      const target = walletId === 'cosmostation' ? Wallet.Cosmostation : Wallet.Keplr
-      await walletStrategy.setWallet(target)
+      await walletStrategy.setWallet(Wallet.Keplr)
 
-      if (walletId === 'keplr') {
-        await suggestKeplrChain()
-      }
+      await suggestKeplrChain()
 
       const addresses = await walletStrategy.enableAndGetAddresses()
       address.value = addresses[0] ?? ''
