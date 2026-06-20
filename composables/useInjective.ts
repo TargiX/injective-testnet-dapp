@@ -392,6 +392,30 @@ export function useInjective() {
   }
 
   // ---- wallet ----
+
+  /**
+   * Wallet extensions inject their global (window.leap / window.keplr) via a
+   * content script that runs after the page loads — and a freshly-installed
+   * extension often needs a page refresh before it injects. The SDK checks the
+   * global synchronously and throws "Please install X extension" if it's
+   * missing at that instant. To avoid a misleading error right after install,
+   * we poll for the global for up to ~3s before handing off to the SDK.
+   */
+  function walletGlobal(walletId: WalletId): any {
+    const w = typeof window !== 'undefined' ? (window as any) : {}
+    return walletId === 'leap' ? w.leap : w.keplr
+  }
+
+  async function waitForWallet(walletId: WalletId, timeoutMs = 3000): Promise<boolean> {
+    if (walletGlobal(walletId)) return true
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 200))
+      if (walletGlobal(walletId)) return true
+    }
+    return false
+  }
+
   async function suggestKeplrChain() {
     const keplr = (window as any).keplr
     if (!keplr) return
@@ -431,6 +455,18 @@ export function useInjective() {
     connecting.value = true
     walletError.value = ''
     try {
+      // Wait for the extension's injected global (handles the just-installed /
+      // slow-injection race). If it never appears, give an actionable error
+      // rather than the SDK's bare "Please install" (which is misleading when
+      // the user just installed it but hasn't refreshed the page).
+      const found = await waitForWallet(walletId)
+      if (!found) {
+        throw new Error(
+          `${walletId === 'leap' ? 'Leap' : 'Keplr'} not detected. ` +
+          'If you just installed the extension, refresh the page and try again.',
+        )
+      }
+
       const { walletStrategy, Wallet } = await getEngine()
       const target = walletId === 'leap' ? Wallet.Leap : Wallet.Keplr
       await walletStrategy.setWallet(target)
