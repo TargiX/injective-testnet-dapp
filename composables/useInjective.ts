@@ -1,6 +1,6 @@
 import type { DerivativeMarket, SpotMarket } from '@injectivelabs/sdk-ts'
 
-export type WalletId = 'keplr' | 'leap'
+export type WalletId = 'keplr' | 'cosmostation'
 
 export type MarketMode = 'spot' | 'perp'
 
@@ -184,9 +184,9 @@ async function createEngine(): Promise<Engine> {
         chainId: ChainId.Mainnet,
         wallet: Wallet.Keplr,
       }),
-      [Wallet.Leap]: new walletCosmos.CosmosWalletStrategy({
+      [Wallet.Cosmostation]: new walletCosmos.CosmosWalletStrategy({
         chainId: ChainId.Mainnet,
-        wallet: Wallet.Leap,
+        wallet: Wallet.Cosmostation,
       }),
     },
   })
@@ -403,7 +403,11 @@ export function useInjective() {
    */
   function walletGlobal(walletId: WalletId): any {
     const w = typeof window !== 'undefined' ? (window as any) : {}
-    return walletId === 'leap' ? w.leap : w.keplr
+    if (walletId === 'cosmostation') {
+      // Cosmostation injects window.cosmostation.providers.keplr (a Keplr-compatible API).
+      return w.cosmostation?.providers?.keplr
+    }
+    return w.keplr
   }
 
   async function waitForWallet(walletId: WalletId, timeoutMs = 3000): Promise<boolean> {
@@ -462,13 +466,13 @@ export function useInjective() {
       const found = await waitForWallet(walletId)
       if (!found) {
         throw new Error(
-          `${walletId === 'leap' ? 'Leap' : 'Keplr'} not detected. ` +
+          `${walletId === 'cosmostation' ? 'Cosmostation' : 'Keplr'} not detected. ` +
           'If you just installed the extension, refresh the page and try again.',
         )
       }
 
       const { walletStrategy, Wallet } = await getEngine()
-      const target = walletId === 'leap' ? Wallet.Leap : Wallet.Keplr
+      const target = walletId === 'cosmostation' ? Wallet.Cosmostation : Wallet.Keplr
       await walletStrategy.setWallet(target)
 
       if (walletId === 'keplr') {

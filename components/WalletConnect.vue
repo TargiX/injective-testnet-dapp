@@ -26,9 +26,9 @@ async function copyAddress() {
     <template v-if="!isConnected">
       <UButton
         :loading="connecting"
-        @click="connect('leap')"
+        @click="connect('cosmostation')"
       >
-        {{ connecting ? 'Connecting…' : 'Connect Leap' }}
+        {{ connecting ? 'Connecting…' : 'Connect Cosmostation' }}
       </UButton>
       <UButton
         variant="outline"
