@@ -11,7 +11,6 @@ const {
   loadMarketStats,
   selectedMarketId,
   mode,
-  switchMode,
   latencyMs,
   lastPollAt,
 } = useInjective()
@@ -94,30 +93,6 @@ watch(selectedMarketId, () => {
 
 <template>
   <div class="flex-1 flex flex-col bg-surface text-[var(--ui-text)] overflow-hidden">
-    <!-- Spot/Perp mode toggle (terminal-only; not relevant on Portfolio page) -->
-    <div class="flex-none flex items-center gap-2 px-4 lg:px-5 py-1.5 border-b border-border-soft">
-      <div class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
-        <button
-          class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
-          :class="mode === 'spot'
-            ? 'bg-surface-3 text-[var(--ui-text)]'
-            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
-          @click="switchMode('spot')"
-        >
-          Spot
-        </button>
-        <button
-          class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded transition-colors"
-          :class="mode === 'perp'
-            ? 'bg-accent/20 text-accent'
-            : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
-          @click="switchMode('perp')"
-        >
-          Perp
-        </button>
-      </div>
-    </div>
-
     <MarketStats />
 
     <!-- ============ DESKTOP (lg+): unchanged 3-column terminal ============ -->

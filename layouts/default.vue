@@ -1,6 +1,9 @@
 <script setup lang="ts">
-const { isTestnet } = useInjective()
+const { isTestnet, mode, switchMode } = useInjective()
 const route = useRoute()
+// The Spot/Perp toggle only makes sense on the terminal page — show it in the
+// header there, next to the network badge, instead of taking a full row.
+const showModeToggle = computed(() => route.path === '/')
 </script>
 
 <template>
@@ -49,6 +52,27 @@ const route = useRoute()
         </div>
       </div>
       <div class="flex items-center gap-3">
+        <!-- Spot/Perp mode toggle (terminal only) -->
+        <div v-if="showModeToggle" class="flex items-center gap-0.5 rounded-md bg-surface-2 p-0.5">
+          <button
+            class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="mode === 'spot'
+              ? 'bg-surface-3 text-[var(--ui-text)]'
+              : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+            @click="switchMode('spot')"
+          >
+            Spot
+          </button>
+          <button
+            class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+            :class="mode === 'perp'
+              ? 'bg-accent/20 text-accent'
+              : 'text-[var(--ui-text-dimmed)] hover:text-[var(--ui-text-muted)]'"
+            @click="switchMode('perp')"
+          >
+            Perp
+          </button>
+        </div>
         <UBadge variant="subtle" :color="isTestnet ? 'warning' : 'success'" size="sm">
           <span
             class="inline-block w-1.5 h-1.5 rounded-full mr-1.5"
