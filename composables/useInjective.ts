@@ -177,6 +177,20 @@ async function createEngine(): Promise<Engine> {
     }),
   )
 
+  // Cosmostation officially supports Injective, but the SDK's inner
+  // CosmosWallet.checkChainIdSupport() runs a STALE check: it queries
+  // `cos_supportedChainIds` and requires injective-1 in the `.official[]` array,
+  // which Cosmostation no longer populates that way — so it always throws.
+  // Cosmostation injects a Keplr-compatible API that handles the real chain
+  // enable correctly (via getCosmos()/enable()), so we keep the Cosmostation
+  // strategy but no-op the one buggy method on the INNER wallet instance.
+  // Instance-level override (not prototype) → doesn't affect other wallets.
+  const cosmostationStrategy = new walletCosmos.CosmosWalletStrategy({
+    chainId: ChainId.Mainnet,
+    wallet: Wallet.Cosmostation,
+  })
+  ;(cosmostationStrategy as any).cosmosWallet.checkChainIdSupport = async () => true
+
   const walletStrategy = new walletCore.BaseWalletStrategy({
     chainId: ChainId.Mainnet,
     strategies: {
@@ -184,6 +198,7 @@ async function createEngine(): Promise<Engine> {
         chainId: ChainId.Mainnet,
         wallet: Wallet.Keplr,
       }),
+      [Wallet.Cosmostation]: cosmostationStrategy,
     },
   })
 
@@ -469,45 +484,17 @@ export function useInjective() {
       }
 
       const { walletStrategy, Wallet } = await getEngine()
+      const target = walletId === 'cosmostation' ? Wallet.Cosmostation : Wallet.Keplr
+      await walletStrategy.setWallet(target)
 
-      // Cosmostation officially supports Injective, but the SDK's Wallet.Cosmostation
-      // path runs a STALE chain-support check (requires injective-1 in the .official[]
-      // array Cosmostation no longer populates that way) and throws. Cosmostation
-      // injects a Keplr-compatible API at window.cosmostation.providers.keplr, so we
-      // route through the (working) Keplr strategy — the buggy check is never reached.
-      //
-      // window.keplr is read-only (Cosmostation/Keplr freeze it), so a plain assignment
-      // throws "Cannot assign to read only property". Object.defineProperty can override
-      // a frozen property; we restore the original descriptor afterwards so a real Keplr
-      // install still works if both extensions are present.
-      let prevKeplrDescriptor: PropertyDescriptor | undefined
-      if (walletId === 'cosmostation') {
-        const provider = walletGlobal('cosmostation')
-        if (provider) {
-          const w = window as any
-          prevKeplrDescriptor = Object.getOwnPropertyDescriptor(w, 'keplr')
-          Object.defineProperty(w, 'keplr', {
-            value: provider,
-            writable: true,
-            configurable: true,
-          })
-        }
-      }
-
-      try {
-        await walletStrategy.setWallet(Wallet.Keplr)
+      if (walletId === 'keplr') {
         await suggestKeplrChain()
-
-        const addresses = await walletStrategy.enableAndGetAddresses()
-        address.value = addresses[0] ?? ''
-        walletName.value = walletId
-        if (address.value) await loadBalances()
-      } finally {
-        // Restore window.keplr so a subsequent Keplr connect finds its own provider.
-        if (walletId === 'cosmostation' && prevKeplrDescriptor) {
-          Object.defineProperty(window, 'keplr', prevKeplrDescriptor)
-        }
       }
+
+      const addresses = await walletStrategy.enableAndGetAddresses()
+      address.value = addresses[0] ?? ''
+      walletName.value = walletId
+      if (address.value) await loadBalances()
     } catch (e: any) {
       walletError.value = e?.message || 'Failed to connect wallet'
     } finally {
