@@ -161,7 +161,7 @@ useHead({ title: 'Bridge · Injective Trading' })
           <UIcon name="i-lucide-wallet" class="size-8 text-[var(--ui-text-dimmed)]" />
         </div>
         <h2 class="text-lg font-bold mb-1">Connect your wallet</h2>
-        <p class="text-sm text-[var(--ui-text-muted)]">Connect Keplr or Leap to bridge tokens via IBC.</p>
+        <p class="text-sm text-[var(--ui-text-muted)]">Connect Keplr or Cosmostation to bridge tokens via IBC.</p>
       </div>
 
       <template v-else>
@@ -407,29 +407,31 @@ useHead({ title: 'Bridge · Injective Trading' })
         <span class="text-[11px] text-[var(--ui-text-muted)]">Review before signing in your wallet.</span>
       </template>
 
-      <div class="space-y-3">
-        <div class="rounded-md bg-surface-2 p-3 space-y-2 text-sm">
-          <div class="flex justify-between">
-            <span class="text-[var(--ui-text-dimmed)] text-xs">Amount</span>
-            <span class="font-mono font-semibold">{{ fmt(numericAmount, 6) }} {{ selectedBalance?.symbol }}</span>
+      <template #body>
+        <div class="space-y-3">
+          <div class="rounded-md bg-surface-2 p-3 space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-[var(--ui-text-dimmed)] text-xs">Amount</span>
+              <span class="font-mono font-semibold">{{ fmt(numericAmount, 6) }} {{ selectedBalance?.symbol }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--ui-text-dimmed)] text-xs">From</span>
+              <span class="font-mono">{{ shortAddress(address) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--ui-text-dimmed)] text-xs">To {{ route.label }}</span>
+              <span class="font-mono">
+                {{ resolvedRecipient?.ok ? shortAddress(resolvedRecipient.address) : '—' }}
+              </span>
+            </div>
+            <div class="flex justify-between border-t border-[var(--ui-border)] pt-2">
+              <span class="text-[var(--ui-text-dimmed)] text-xs">Channel</span>
+              <span class="font-mono">{{ route.channelId }}</span>
+            </div>
           </div>
-          <div class="flex justify-between">
-            <span class="text-[var(--ui-text-dimmed)] text-xs">From</span>
-            <span class="font-mono">{{ shortAddress(address) }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-[var(--ui-text-dimmed)] text-xs">To {{ route.label }}</span>
-            <span class="font-mono">
-              {{ resolvedRecipient?.ok ? shortAddress(resolvedRecipient.address) : '—' }}
-            </span>
-          </div>
-          <div class="flex justify-between border-t border-[var(--ui-border)] pt-2">
-            <span class="text-[var(--ui-text-dimmed)] text-xs">Channel</span>
-            <span class="font-mono">{{ route.channelId }}</span>
-          </div>
+          <p v-if="lastResult && 'error' in lastResult" class="text-xs text-ask">{{ lastResult.error }}</p>
         </div>
-        <p v-if="lastResult && 'error' in lastResult" class="text-xs text-ask">{{ lastResult.error }}</p>
-      </div>
+      </template>
 
       <template #footer>
         <div class="flex justify-end gap-2 w-full">
