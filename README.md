@@ -1,5 +1,8 @@
 # Injective Testnet dApp
 
+**Live demo:** [injective.ilyamoskovkin.com](https://injective.ilyamoskovkin.com)  
+**Source:** [github.com/TargiX/injective-testnet-dapp](https://github.com/TargiX/injective-testnet-dapp)
+
 A small **Nuxt 3 / TypeScript** dApp on the **Injective (Cosmos) testnet**. One focused project that touches the whole stack:
 
 - **Wallet integration** — connect Keplr / Leap via the modular `@injectivelabs/wallet-*` strategy packages.
