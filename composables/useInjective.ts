@@ -177,19 +177,29 @@ async function createEngine(): Promise<Engine> {
     }),
   )
 
-  // Cosmostation officially supports Injective, but the SDK's inner
-  // CosmosWallet.checkChainIdSupport() runs a STALE check: it queries
-  // `cos_supportedChainIds` and requires injective-1 in the `.official[]` array,
-  // which Cosmostation no longer populates that way — so it always throws.
-  // Cosmostation injects a Keplr-compatible API that handles the real chain
-  // enable correctly (via getCosmos()/enable()), so we keep the Cosmostation
-  // strategy but no-op the one buggy method on the INNER wallet instance.
-  // Instance-level override (not prototype) → doesn't affect other wallets.
+  // NOTE on Cosmostation: the SDK has TWO bugs blocking it:
+  //   1. CosmosWalletStrategy's constructor allow-list (`cosmosWallets`) omits
+  //      Cosmostation, so `new CosmosWalletStrategy({ wallet: Wallet.Cosmostation })`
+  //      throws "Cosmos Wallet for Cosmostation is not supported". That array
+  //      isn't exported. Fix: build a Keplr strategy (passes the guard) then swap
+  //      its `wallet` + inner `cosmosWallet` to Cosmostation. The inner
+  //      CosmosWallet allow-list DOES include Cosmostation.
+  //   2. checkCosmostationChainSupport() requires injective-1 in a `.official[]`
+  //      array Cosmostation no longer populates. Fix: no-op the stale check on
+  //      our inner instance (Cosmostation's Keplr-compatible API handles enable).
+  // getCurrentCosmosWallet() just returns this.cosmosWallet without re-validating,
+  // so the swaps are safe and complete. Instance-level → no effect on Keplr.
   const cosmostationStrategy = new walletCosmos.CosmosWalletStrategy({
     chainId: ChainId.Mainnet,
-    wallet: Wallet.Cosmostation,
+    wallet: Wallet.Keplr, // passes the constructor guard (bug #1 bypass)
   })
-  ;(cosmostationStrategy as any).cosmosWallet.checkChainIdSupport = async () => true
+  const cosmostationInner = new walletCosmos.CosmosWallet({
+    wallet: Wallet.Cosmostation, // inner allow-list includes it
+    chainId: ChainId.Mainnet,
+  })
+  ;(cosmostationInner as any).checkChainIdSupport = async () => true // bug #2 bypass
+  ;(cosmostationStrategy as any).wallet = Wallet.Cosmostation
+  ;(cosmostationStrategy as any).cosmosWallet = cosmostationInner
 
   const walletStrategy = new walletCore.BaseWalletStrategy({
     chainId: ChainId.Mainnet,
