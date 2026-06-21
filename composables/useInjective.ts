@@ -474,13 +474,24 @@ export function useInjective() {
       // path runs a STALE chain-support check (requires injective-1 in the .official[]
       // array Cosmostation no longer populates that way) and throws. Cosmostation
       // injects a Keplr-compatible API at window.cosmostation.providers.keplr, so we
-      // alias it onto window.keplr and use the (working) Keplr strategy — the buggy
-      // check is never reached. We restore the original window.keplr afterwards so a
-      // real Keplr install still works if both extensions are present.
-      const prevKeplr = (window as any).keplr
+      // route through the (working) Keplr strategy — the buggy check is never reached.
+      //
+      // window.keplr is read-only (Cosmostation/Keplr freeze it), so a plain assignment
+      // throws "Cannot assign to read only property". Object.defineProperty can override
+      // a frozen property; we restore the original descriptor afterwards so a real Keplr
+      // install still works if both extensions are present.
+      let prevKeplrDescriptor: PropertyDescriptor | undefined
       if (walletId === 'cosmostation') {
         const provider = walletGlobal('cosmostation')
-        if (provider) (window as any).keplr = provider
+        if (provider) {
+          const w = window as any
+          prevKeplrDescriptor = Object.getOwnPropertyDescriptor(w, 'keplr')
+          Object.defineProperty(w, 'keplr', {
+            value: provider,
+            writable: true,
+            configurable: true,
+          })
+        }
       }
 
       try {
@@ -493,7 +504,9 @@ export function useInjective() {
         if (address.value) await loadBalances()
       } finally {
         // Restore window.keplr so a subsequent Keplr connect finds its own provider.
-        if (walletId === 'cosmostation') (window as any).keplr = prevKeplr
+        if (walletId === 'cosmostation' && prevKeplrDescriptor) {
+          Object.defineProperty(window, 'keplr', prevKeplrDescriptor)
+        }
       }
     } catch (e: any) {
       walletError.value = e?.message || 'Failed to connect wallet'
