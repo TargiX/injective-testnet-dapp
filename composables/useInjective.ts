@@ -1,6 +1,6 @@
 import type { DerivativeMarket, SpotMarket } from '@injectivelabs/sdk-ts'
 
-export type WalletId = 'keplr'
+export type WalletId = 'keplr' | 'cosmostation'
 
 export type MarketMode = 'spot' | 'perp'
 
@@ -397,10 +397,13 @@ export function useInjective() {
    * missing at that instant. To avoid a misleading error right after install,
    * we poll for the global for up to ~3s before handing off to the SDK.
    */
-  function walletGlobal(_walletId: WalletId): any {
-    // Keplr injects window.keplr. Kept the walletId param so the signature stays
-    // stable if we add wallets later.
+  function walletGlobal(walletId: WalletId): any {
     const w = typeof window !== 'undefined' ? (window as any) : {}
+    if (walletId === 'cosmostation') {
+      // Cosmostation injects window.cosmostation.providers.keplr — a Keplr-compatible
+      // API we route through the (working) Keplr strategy. See connect() for why.
+      return w.cosmostation?.providers?.keplr
+    }
     return w.keplr
   }
 
@@ -460,19 +463,38 @@ export function useInjective() {
       const found = await waitForWallet(walletId)
       if (!found) {
         throw new Error(
-          'Keplr not detected. If you just installed the extension, refresh the page and try again.',
+          `${walletId === 'cosmostation' ? 'Cosmostation' : 'Keplr'} not detected. ` +
+          'If you just installed the extension, refresh the page and try again.',
         )
       }
 
       const { walletStrategy, Wallet } = await getEngine()
-      await walletStrategy.setWallet(Wallet.Keplr)
 
-      await suggestKeplrChain()
+      // Cosmostation officially supports Injective, but the SDK's Wallet.Cosmostation
+      // path runs a STALE chain-support check (requires injective-1 in the .official[]
+      // array Cosmostation no longer populates that way) and throws. Cosmostation
+      // injects a Keplr-compatible API at window.cosmostation.providers.keplr, so we
+      // alias it onto window.keplr and use the (working) Keplr strategy — the buggy
+      // check is never reached. We restore the original window.keplr afterwards so a
+      // real Keplr install still works if both extensions are present.
+      const prevKeplr = (window as any).keplr
+      if (walletId === 'cosmostation') {
+        const provider = walletGlobal('cosmostation')
+        if (provider) (window as any).keplr = provider
+      }
 
-      const addresses = await walletStrategy.enableAndGetAddresses()
-      address.value = addresses[0] ?? ''
-      walletName.value = walletId
-      if (address.value) await loadBalances()
+      try {
+        await walletStrategy.setWallet(Wallet.Keplr)
+        await suggestKeplrChain()
+
+        const addresses = await walletStrategy.enableAndGetAddresses()
+        address.value = addresses[0] ?? ''
+        walletName.value = walletId
+        if (address.value) await loadBalances()
+      } finally {
+        // Restore window.keplr so a subsequent Keplr connect finds its own provider.
+        if (walletId === 'cosmostation') (window as any).keplr = prevKeplr
+      }
     } catch (e: any) {
       walletError.value = e?.message || 'Failed to connect wallet'
     } finally {
