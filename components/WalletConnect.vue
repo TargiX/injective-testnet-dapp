@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shortAddress } from '~/utils/inj-format'
+import type { DropdownMenuItem } from '@nuxt/ui'
 
 const {
   address,
@@ -18,9 +19,37 @@ async function copyAddress() {
   try {
     await navigator.clipboard.writeText(address.value)
     copied.value = true
-    setTimeout(() => (copied = false), 1200)
+    toast.add({ title: 'Address copied', color: 'success', icon: 'i-lucide-check', timeout: 1500 })
+    setTimeout(() => (copied.value = false), 1500)
   } catch { /* */ }
 }
+
+// Wallet "logo": deterministic color from the wallet name + first letter, in a
+// TokenIcon-style circle. No brand-icon dependency needed (Keplr/Cosmostation
+// aren't in simple-icons anyway), and it stays consistent with the app's look.
+const walletInitial = computed(() => (walletName.value || 'W').charAt(0).toUpperCase())
+const walletColor = computed(() => {
+  const name = walletName.value || ''
+  // Cheap deterministic hue from the name; 55% saturation / 45% lightness reads
+  // well on dark and matches TokenIcon's style.
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
+  return `hsl(${h} 55% 45%)`
+})
+
+// Dropdown items for the connected state.
+const menuItems = computed<DropdownMenuItem[][]>(() => [
+  [
+    { label: 'Copy address', icon: 'i-lucide-copy', onSelect: () => copyAddress() },
+    {
+      label: 'View on Explorer',
+      icon: 'i-lucide-external-link',
+      to: `https://www.mintscan.io/injective/address/${address.value}`,
+      target: '_blank',
+    },
+  ],
+  [{ label: 'Disconnect', icon: 'i-lucide-log-out', color: 'error', onSelect: () => disconnect() }],
+])
 
 // Surface wallet errors as a readable toast (with install link + icon) instead
 // of a truncated inline span. The toast auto-dismisses and never gets clipped.
@@ -69,23 +98,28 @@ watch(walletError, (err) => {
       </UButton>
     </template>
 
-    <template v-else>
-      <UButton
-        variant="outline"
-        :title="address"
-        @click="copyAddress"
+    <!-- Connected: wallet logo circle + address as a dropdown trigger -->
+    <UDropdownMenu
+      v-else
+      :items="menuItems"
+      :content="{ align: 'end' }"
+      :ui="{ content: 'w-52' }"
+    >
+      <button
+        class="flex items-center gap-2 rounded-md bg-surface-2 hover:bg-surface-3 ring-1 ring-[var(--ui-border)] pl-1.5 pr-2 py-1 transition-colors cursor-pointer"
       >
-        <span class="capitalize text-accent font-semibold">{{ walletName }}</span>
-        <span class="font-mono tabular-nums">{{ shortAddress(address) }}</span>
-        <UIcon
-          :name="copied ? 'i-lucide-check' : 'i-lucide-copy'"
-          class="size-3.5 text-[var(--ui-text-dimmed)]"
-          :class="copied ? 'text-bid' : ''"
-        />
-      </UButton>
-      <UButton variant="ghost" @click="disconnect">
-        Disconnect
-      </UButton>
-    </template>
+        <span
+          class="w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold text-white flex-none"
+          :style="{ background: walletColor }"
+        >
+          {{ walletInitial }}
+        </span>
+        <span class="flex flex-col items-start leading-tight">
+          <span class="text-[9px] text-[var(--ui-text-dimmed)] uppercase tracking-wider capitalize">{{ walletName }}</span>
+          <span class="text-[11px] font-mono tabular-nums">{{ shortAddress(address) }}</span>
+        </span>
+        <UIcon name="i-lucide-chevron-down" class="size-3.5 text-[var(--ui-text-dimmed)] flex-none" />
+      </button>
+    </UDropdownMenu>
   </div>
 </template>
