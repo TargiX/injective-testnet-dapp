@@ -16,6 +16,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
+      posthogKey: "",
       // 'mainnet' | 'testnet' — set NUXT_PUBLIC_NETWORK=testnet locally to
       // trade on the public testnet with faucet funds (chain injective-888).
       network: process.env.NUXT_PUBLIC_NETWORK || 'mainnet',
