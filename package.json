@@ -22,7 +22,8 @@
     "@injectivelabs/wallet-cosmos": "^1.19.28",
     "@injectivelabs/wallet-evm": "^1.19.28",
     "@nuxt/ui": "^3.3.7",
-    "lightweight-charts": "^5.2.0"
+    "lightweight-charts": "^5.2.0",
+    "posthog-js": "^1.434.2"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.111",
